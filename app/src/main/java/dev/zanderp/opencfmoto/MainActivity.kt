@@ -87,19 +87,9 @@ class MainActivity : AppCompatActivity() {
 
         if (pendingAaStart) {
             pendingAaStart = false
-            startAaFlow(qr)
+            CarbitConnectionManager.connect(this, qr)
         } else {
-            // Mirror path (screen projection already armed): connect straight away.
-            applyProfile(qr)
-            ConnectionState.set(Phase.MIRRORING, BikeMemory.lastBikeName(this) ?: qr.ssid)
-            joinWifi(qr, gateOnAaSteady = false)
-            // Same as startMirrorLink: single-app capture needs the shared app visible.
-            moveTaskToBack(true)
-            Toast.makeText(
-                this,
-                getString(R.string.main_mirror_leave_shared_app),
-                Toast.LENGTH_LONG,
-            ).show()
+            CarbitConnectionManager.connect(this, qr)
         }
     }
 
@@ -482,7 +472,7 @@ class MainActivity : AppCompatActivity() {
                 ProjectionHolder.projection = null
                 GpxSession.clear()
                 ensureLocationPermission()
-                startAaFlow(saved)
+                CarbitConnectionManager.connect(this, saved)
             } else {
                 log("→ Connect: no saved bike — scan the dash QR.")
                 startAaScan()
@@ -662,7 +652,7 @@ class MainActivity : AppCompatActivity() {
         AndroidAutoService.notifyForegroundResuming()
         ProjectionHolder.projection = null
         ensureLocationPermission()
-        startAaFlow(saved)
+        CarbitConnectionManager.connect(this, saved)
     }
 
     /**
@@ -718,7 +708,7 @@ class MainActivity : AppCompatActivity() {
                     return@postDelayed
                 }
                 if (!AndroidAutoService.isRunning && !ConnectionState.phase.busy) {
-                    activity.startAaFlow(saved)
+                    CarbitConnectionManager.connect(activity, saved)
                 }
             } catch (e: Exception) {
                 LogBus.log("auto-connect failed (app stays open): $e")
@@ -961,7 +951,7 @@ class MainActivity : AppCompatActivity() {
         val saved = BikeMemory.lastQr(this) ?: return
         ProjectionHolder.projection = null
         ensureLocationPermission()
-        startAaFlow(saved)
+        CarbitConnectionManager.connect(this, saved)
     }
 
     private fun showNavigationChooser() {
@@ -1407,6 +1397,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopEverything() {
         log("→ stopping everything (Android Auto + bike)")
+        try { CarbitConnectionManager.disconnect(this) } catch (_: Exception) {}
         try { AaVideoBridge.onSteadyVideo = null } catch (_: Exception) {}
         try { AndroidAutoService.stop(this) } catch (e: Exception) { log("AA stop: $e") }
         try { if (::prober.isInitialized) prober.stop() } catch (e: Exception) { log("prober stop: $e") }
