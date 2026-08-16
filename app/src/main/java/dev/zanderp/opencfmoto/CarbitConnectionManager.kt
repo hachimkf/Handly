@@ -55,6 +55,9 @@ object CarbitConnectionManager {
             "modelId=${qr.modelId}, mac=${qr.mac}, action=${qr.action}, ssid=${qr.ssid}",
         )
 
+        // Clean up previous sockets and groups before starting a new link
+        cleanupPreviousSession(appCtx)
+
         // Select bike profile
         val profile = BikeProfiles.selectByQr(qr, appCtx)
         BikeProfileHolder.active = profile
@@ -63,9 +66,6 @@ object CarbitConnectionManager {
 
         val bikeName = BikeMemory.lastBikeName(appCtx) ?: qr.name ?: qr.ssid
         ConnectionState.set(Phase.JOINING_WIFI, bikeName)
-
-        // Tear down any stale session before opening a new link
-        disconnect(appCtx)
 
         val pr = EasyConnProber(appCtx, LogBus::log)
         prober = pr
@@ -92,11 +92,7 @@ object CarbitConnectionManager {
         return true
     }
 
-    /**
-     * Cleanly disconnect and release all sockets, listeners, and P2P groups.
-     */
-    fun disconnect(context: Context? = null) {
-        LogBus.log("$TAG disconnect() called")
+    private fun cleanupPreviousSession(context: Context?) {
         try {
             prober?.stop()
             prober = null
@@ -107,8 +103,16 @@ object CarbitConnectionManager {
                 WifiGate.cancelNotification(context.applicationContext)
             }
         } catch (e: Exception) {
-            LogBus.log("$TAG disconnect error: ${e.message}")
+            LogBus.log("$TAG cleanup error: ${e.message}")
         }
+    }
+
+    /**
+     * Cleanly disconnect and release all sockets, listeners, and P2P groups.
+     */
+    fun disconnect(context: Context? = null) {
+        LogBus.log("$TAG disconnect() called")
+        cleanupPreviousSession(context)
         ConnectionState.set(Phase.STOPPED)
     }
 
