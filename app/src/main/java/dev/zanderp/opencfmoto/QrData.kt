@@ -34,6 +34,7 @@ data class QrData(
     val modelId: String?,
     val sn: String?,
     val channel: String?,
+    val rawString: String = "",
 ) {
     val supportsAp: Boolean get() = (action and 1) != 0 || (action and 2) != 0
     val supportsP2p: Boolean get() = (action and 8) != 0
@@ -45,11 +46,11 @@ data class QrData(
         fun parse(raw: String): QrData? {
             val trimmed = raw.trim()
             if (trimmed.isEmpty()) return null
-            parseCarbit(trimmed)?.let { return it }
-            parseCarbitToken(trimmed)?.let { return it }
-            parseMotoMorini(trimmed)?.let { return it }
-            parseThinkerride(trimmed)?.let { return it }
-            return null
+            val result = parseCarbit(trimmed)
+                ?: parseCarbitToken(trimmed)
+                ?: parseMotoMorini(trimmed)
+                ?: parseThinkerride(trimmed)
+            return result?.copy(rawString = raw)
         }
 
         /**
@@ -66,10 +67,11 @@ data class QrData(
             val phoneHotspot = (action and 128) != 0 || (ssid.isEmpty() && hasMac && q.containsKey("bm"))
             if (ssid.isEmpty() && !phoneHotspot && !hasMac) return null
             if (ssid.isNotEmpty() && pwd.isEmpty() && !phoneHotspot && !hasMac) return null
+            val wifiMac = mac?.let { if (it.startsWith("dd:", ignoreCase = true)) "dc:" + it.substring(3) else it }
             val display = q["name"]?.takeIf { it.isNotBlank() }
                 ?: if (ssid.isNotEmpty()) null
-                else mac?.let { "EC_${it.replace(":", "").uppercase()}" }
-            val resolvedSsid = if (ssid.isNotEmpty()) ssid else (mac?.let { "EC_${it.replace(":", "").uppercase()}" } ?: "")
+                else wifiMac?.let { "EC_${it.replace(":", "").uppercase()}" }
+            val resolvedSsid = if (ssid.isNotEmpty()) ssid else (wifiMac?.let { "EC_${it.replace(":", "").uppercase()}" } ?: "")
             return QrData(
                 ssid = resolvedSsid,
                 pwd = pwd,

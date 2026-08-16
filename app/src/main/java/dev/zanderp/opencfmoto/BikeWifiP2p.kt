@@ -189,8 +189,9 @@ object BikeWifiP2p {
         val config = WifiP2pConfig().apply {
             deviceAddress = mac
             wps.setup = WpsInfo.PBC
+            groupOwnerIntent = 0
         }
-        log("$TAG connect(): joining peer MAC=$mac (WPS PBC) …")
+        log("$TAG connect(): joining peer MAC=$mac (WPS PBC, client role) …")
         connectIssued = true
         mgr.connect(chan, config, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
