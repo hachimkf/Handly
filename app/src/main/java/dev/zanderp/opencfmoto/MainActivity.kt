@@ -49,8 +49,6 @@ class MainActivity : AppCompatActivity() {
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var bleWakeUp: BleWakeUp? = null
     private val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
-    /** True when the pending QR scan should kick off the Android Auto flow (vs the mirror path). */
-    private var pendingAaStart = false
     /** Guards the "close the official CFMoto app" prompt so it shows once per error, not every redraw. */
     private var rivalPromptShown = false
     /** Guards the VPN kill-switch prompt so it shows once per error, not every redraw. */
@@ -85,12 +83,7 @@ class MainActivity : AppCompatActivity() {
         BikeMemory.save(this, raw, qr)
         refreshBikeLabel()
 
-        if (pendingAaStart) {
-            pendingAaStart = false
-            CarbitConnectionManager.connect(this, qr)
-        } else {
-            CarbitConnectionManager.connect(this, qr)
-        }
+        CarbitConnectionManager.connect(this, qr)
     }
 
     /** Pick the bike profile from the QR up front — it drives the Android Auto resolution/orientation,
@@ -161,80 +154,9 @@ class MainActivity : AppCompatActivity() {
         BikeLink.beginHandoff(this)
     }
 
-    /** Start the Android Auto → bike projection for [qr]. Shared by the one-tap Connect reconnect
-     *  and a fresh scan, so both paths behave identically. */
+    /** Connect to the motorcycle via CarbitConnectionManager. */
     private fun startAaFlow(qr: QrData) {
-        try {
-            if (!WifiGate.ensureEnabledOrPrompt(this)) return
-            // AA Connect needs Nearby + Bluetooth so HUR (START_WIRELESS_PROJECTION) can run when
-            // WirelessStartupActivity is a no-op (common on AA 16.4+/17.4+). Mirror/Map unchanged.
-            if (!ensureNearbyBtForAaConnect()) return
-            // Map / Mirror / stale PXC must die first — half-switches leave framesSent=0.
-            tearDownForModeSwitch(clearMap = true, clearMirror = true)
-            applyProfile(qr)
-            val bikeName = BikeMemory.lastBikeName(this) ?: qr.ssid
-            ConnectionState.set(Phase.STARTING_AA, bikeName)
-            log("→ starting Android Auto receiver (loopback self-mode). Ensure Android Auto is installed & set up.")
-
-            // Parallel startup: the two slow steps (AA reaching steady video, and the user accepting the
-            // bike Wi-Fi dialog) now overlap. [BikeLink] gates the actual bike probe until BOTH complete,
-            // so the bike is never contacted before AA has frames to serve. These callbacks fire against
-            // process-global state (applicationContext + BikeLink.prober), NOT this activity: launching
-            // Google AA can destroy/recreate MainActivity mid-startup and the hand-off must still finish.
-            BikeLink.beginHandoff(this)
-            AaVideoBridge.onSteadyVideo = {
-                AaVideoBridge.onSteadyVideo = null
-                ConnectionState.set(Phase.AA_VIDEO_LIVE)
-                LogBus.log("→ Android Auto video is live")
-                AndroidAutoService.upgradeForegroundForMicrophone()
-                BikeLink.markAaVideoSteady()
-            }
-            AndroidAutoService.start(this)
-            // Trigger Google AA to project from the FOREGROUND activity (background-activity-launch
-            // safe on Android 12+/15), after giving the service's :5288 server time to bind.
-            // AA 16.4+/17.4+ often need the broadcast fallbacks; retry once if video never arrives
-            // (common when the first WirelessStartupReceiver is ignored).
-            mainHandler.postDelayed({
-                try {
-                    dev.zanderp.opencfmoto.aa.AaSelfMode.trigger(this, log = ::log)
-                } catch (e: Exception) {
-                    log("AA self-mode trigger failed: $e")
-                }
-            }, 900)
-            // Additive retry for AA 16.4+/17.4+ that ignore the first broadcast — skipped if
-            // a session is already live (re-firing START_WIRELESS_PROJECTION kills AAP).
-            mainHandler.postDelayed({
-                if (aaAlreadyLiveOrTerminal()) {
-                    if (AaVideoBridge.aaSessionLive || AaVideoBridge.aaDecoding) {
-                        log("[AA] skip re-trigger — AA already connected/decoding")
-                    }
-                    return@postDelayed
-                }
-                try {
-                    log("[AA] no video yet — re-triggering self-mode (AA 16.4+/17.4+ fallbacks)")
-                    dev.zanderp.opencfmoto.aa.AaSelfMode.trigger(this, log = ::log)
-                } catch (e: Exception) {
-                    log("AA self-mode re-trigger failed: $e")
-                }
-            }, 4_500)
-            // Give up the silent black/QR reconnect loop — surface a clear error after several tries.
-            mainHandler.postDelayed({
-                val p = ConnectionState.phase
-                if (p == Phase.IDLE || p == Phase.STOPPED || p == Phase.ERROR ||
-                    p == Phase.STREAMING || p == Phase.MIRRORING
-                ) return@postDelayed
-                if (AaVideoBridge.aaSessionLive || AaVideoBridge.aaDecoding) return@postDelayed
-                // Still no AA after retries — stop thrashing (bike SoftAP may already be up).
-                log("[AA] Android Auto never attached — stopping silent retry")
-                ConnectionState.set(Phase.ERROR, getString(R.string.conn_detail_aa_not_started))
-            }, 18_000)
-            // Kick off the Wi-Fi join right away, in parallel with AA boot.
-            joinWifi(qr, gateOnAaSteady = true)
-        } catch (e: Exception) {
-            log("Connect failed (app stays open): $e")
-            CrashGuard.persistSession(this)
-            ConnectionState.set(Phase.ERROR, getString(R.string.conn_detail_connect_failed))
-        }
+        CarbitConnectionManager.connect(this, qr)
     }
 
     private fun aaAlreadyLiveOrTerminal(): Boolean {
@@ -475,7 +397,7 @@ class MainActivity : AppCompatActivity() {
                 CarbitConnectionManager.connect(this, saved)
             } else {
                 log("→ Connect: no saved bike — scan the dash QR.")
-                startAaScan()
+                startScan()
             }
         }
 
@@ -493,7 +415,7 @@ class MainActivity : AppCompatActivity() {
             stopEverything()
         }
 
-        findViewById<View>(R.id.btn_aa_start)?.setOnClickListener { startAaScan() }
+        findViewById<View>(R.id.btn_aa_start)?.setOnClickListener { startScan() }
         findViewById<View>(R.id.btn_mirror_start)?.setOnClickListener { onMirrorPressed() }
         findViewById<View>(R.id.btn_gpx)?.setOnClickListener { onMapPressed() }
         findViewById<View>(R.id.btn_aa_stop)?.setOnClickListener { stopEverything() }
@@ -751,21 +673,19 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    /** Launch the QR scanner for the Android Auto path (profile is chosen from the scan result). */
-    private fun startAaScan() {
+    /** Launch the QR scanner (profile is chosen from the scan result). */
+    private fun startScan() {
         if (DependencyPrompt.showForConnect(this, forScan = true)) {
             log("→ Scan blocked — missing dependencies (see dialog)")
             return
         }
-        log("→ Android Auto: scan the bike QR first so we pick the right screen profile.")
-        pendingAaStart = true
-        ProjectionHolder.projection = null   // bike uses the AA pipeline, not mirror
+        log("→ Scan: scan the motorcycle dashboard QR.")
+        ProjectionHolder.projection = null
         ensureLocationPermission()
         try {
             scanLauncher.launch(Intent(this, QrScanActivity::class.java))
         } catch (e: Exception) {
             log("scan launch failed ($e)")
-            pendingAaStart = false
         }
     }
 
@@ -948,10 +868,9 @@ class MainActivity : AppCompatActivity() {
 
     /** Re-run the one-tap Connect for the saved bike (used after closing the rival app). */
     private fun reconnectSavedBike() {
-        val saved = BikeMemory.lastQr(this) ?: return
         ProjectionHolder.projection = null
         ensureLocationPermission()
-        CarbitConnectionManager.connect(this, saved)
+        CarbitConnectionManager.reconnect(this)
     }
 
     private fun showNavigationChooser() {
@@ -1447,7 +1366,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
         log("→ Mirror: cast phone screen to dash")
-        pendingAaStart = false
         ensureLocationPermission()
         try {
             val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -1664,7 +1582,6 @@ class MainActivity : AppCompatActivity() {
             GpxActivity.start(this)
             return
         }
-        pendingAaStart = false
         ensureLocationPermission()
         val live = ConnectionState.phase == Phase.STREAMING ||
             ConnectionState.phase == Phase.MIRRORING ||
