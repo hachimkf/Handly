@@ -61,7 +61,7 @@ class PxcHandshake(
             }
             PxcFrame.CMD_CLIENT_INFO -> {
                 DiagnosticsStore.updatePxc(handshakeState = "CLIENT_INFO RECEIVED")
-                ConnectionTrace.transition(ConnectionTrace.Step.CLIENT_INFO_SENT, "version=2, supportFunction=128")
+                ConnectionTrace.transition(ConnectionTrace.Step.CLIENT_INFO_RECEIVED, "CMD_CLIENT_INFO (0x10010)")
                 onClientInfo(tag, frame, out)
             }
             PxcFrame.CMD_QUERY_SPEED -> {
@@ -147,11 +147,6 @@ class PxcHandshake(
         val pkg = json.optString("package_name").ifEmpty { json.optString("package") }
         val versionName = json.optString("version_name")
 
-        ConnectionTrace.transition(
-            ConnectionTrace.Step.CLIENT_INFO_RESPONSE_RECEIVED,
-            "HUID=$carHuid, Sware=$sware, Hware=$hware, pkg=$pkg",
-        )
-
         ConnectionState.updateDashMetadata(
             ConnectionState.DashMetadata(
                 huid = carHuid ?: "",
@@ -169,9 +164,6 @@ class PxcHandshake(
         profile = BikeProfiles.select(json, log)
         val early = BikeProfileHolder.active
         val startedSpec = BikeProfileHolder.aaVideo  // what Android Auto actually started / negotiated with
-        // Keep a measured landscape panel (e.g. 800MT 1280×576) when CLIENT_INFO scoring would
-        // flip to the near-square 800NK Advanced profile — that mis-route resized touch/margins
-        // mid-session while AA stayed on the landscape stream (connect/drop flaps in field logs).
         val earlyPanel = early.panelSize
         val earlyIsWide = earlyPanel != null && earlyPanel.first >= earlyPanel.second * 3 / 2
         if (earlyIsWide && profile === Cfdl26NkTouchProfile) {
@@ -184,12 +176,6 @@ class PxcHandshake(
                 "(AA already started at the QR-guess resolution)")
         }
         BikeProfileHolder.active = profile  // authoritative; QR modelId was only the early hint
-        // Android Auto's video surface + decoder buffer were sized when AA started (from the QR guess)
-        // and CANNOT be resized mid-session. If the refined profile wants a different resolution and no
-        // explicit override is in effect, pin the spec to what AA is really running: otherwise the
-        // compositor scales the live source (e.g. 800x480) as if it were the profile's (e.g. 720x1280),
-        // producing a wildly wrong draw rect and a picture the dash rejects — which drops the link every
-        // few seconds (the connect/drop flap). Known/consistent bikes hit no-op here.
         if (BikeProfileHolder.aaVideoOverride == null && BikeProfileHolder.aaVideo != startedSpec) {
             BikeProfileHolder.aaVideoOverride = startedSpec
             log("[$tag] pinned AA video to ${startedSpec.width}x${startedSpec.height} " +
@@ -199,6 +185,10 @@ class PxcHandshake(
 
         val reply = profile.buildClientInfoReply(json, carHuid, phoneUuid)
         log("[$tag] → CLIENT_INFO reply ${reply.toString().take(180)}…")
+        ConnectionTrace.transition(
+            ConnectionTrace.Step.CLIENT_INFO_SENT,
+            "version=2, supportFunction=128, HUID=$carHuid",
+        )
         PxcFrame(PxcFrame.CMD_CLIENT_INFO_RLY, reply.toString().toByteArray(Charsets.UTF_8)).write(out)
         pushPhoneHuTime(tag, out, "after CLIENT_INFO")
     }
@@ -218,6 +208,7 @@ class PxcHandshake(
             put("client_set", "easy_conn")
         }
         log("[$tag] → CHECK_SN_RESULT ${result}")
+        ConnectionTrace.transition(ConnectionTrace.Step.HANDSHAKE_COMPLETE, "SN=$sn, isOk=true")
         PxcFrame(PxcFrame.CMD_CHECK_SN_RESULT, result.toString().toByteArray(Charsets.UTF_8)).write(out)
     }
 }

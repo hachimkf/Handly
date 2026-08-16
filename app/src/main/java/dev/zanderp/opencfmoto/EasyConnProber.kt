@@ -197,10 +197,6 @@ class EasyConnProber(
         }
 
         // 1. Listen on all three ports BEFORE probing, so we're ready for the bike's call-back.
-        //    SO_REUSEADDR (set before bind) lets us re-listen immediately after a Stop→Connect: the
-        //    bike's just-closed call-back sockets leave these ports in TIME_WAIT for up to a couple
-        //    minutes, and without reuse the rebind fails with EADDRINUSE — so no media servers open,
-        //    the bike has nowhere to connect back to, and the dash shows an empty screen (no frames).
         var bindConflict = false
         for (port in LISTEN_PORTS) {
             try {
@@ -209,20 +205,26 @@ class EasyConnProber(
                 ss.bind(InetSocketAddress(myIp, port), 50)
                 servers.add(ss)
                 spawnAccept(port, ss)
+                log(":$port BOUND on ${myIp.hostAddress}")
+                when (port) {
+                    PORT_MEDIA_DATA -> ConnectionTrace.transition(ConnectionTrace.Step.PXC_SERVER_10920_BOUND, "${myIp.hostAddress}:$port")
+                    PORT_MEDIA_CTRL -> ConnectionTrace.transition(ConnectionTrace.Step.PXC_SERVER_10921_BOUND, "${myIp.hostAddress}:$port")
+                    PORT_PXC_CTRL -> ConnectionTrace.transition(ConnectionTrace.Step.PXC_SERVER_10922_BOUND, "${myIp.hostAddress}:$port")
+                }
             } catch (e: Exception) {
                 bindConflict = true
-                log("bind :$port failed: ${e.message}")
+                log(":$port FAILED reason=${e.javaClass.simpleName}: ${e.message}")
             }
         }
         log("listening on ${myIp.hostAddress} ports ${LISTEN_PORTS.toList()} (${servers.count { !it.isClosed }} open)")
 
-        // If a port is taken, the bike's mirroring link ports are held by another EasyConnect client —
-        // almost always the official CFMoto app running in the background (it binds the same 10920-10922
-        // and the bike connects back to IT, not us). Probing anyway is pointless: no media server means
-        // no frames and a blank dash. Fail fast with an actionable message instead of failing silently.
         if (bindConflict) {
             log("!! link ports are held by another app (usually the official CFMoto/EasyConnect app). " +
                 "Close it (force-stop) and reconnect — OpenCfMoto needs ports ${LISTEN_PORTS.toList()}.")
+            ConnectionTrace.fail(
+                failedStep = ConnectionTrace.Step.PXC_SERVER_10922_BOUND,
+                reason = "Port conflict (10920-10922 already in use)",
+            )
             ConnectionState.set(Phase.ERROR, "close the official CFMoto app, then reconnect")
             stop()
             return
@@ -394,9 +396,12 @@ class EasyConnProber(
     private fun discoverAndProbe(bikeIp: Inet4Address, myIp: Inet4Address, network: Network?) {
         BikeWifi.rebindProcessToBike(context)
 
+        ConnectionTrace.transition(ConnectionTrace.Step.EASYCONN_DISCOVERY_STARTED, "Target=${bikeIp.hostAddress}")
         val nsd = EasyConnDiscovery.discoverNsd(context, log)
         if (!running) return
         if (nsd != null) {
+            log("NSD: FOUND | NSD HOST: ${nsd.host.hostAddress} | NSD PORT: ${nsd.port}")
+            ConnectionTrace.transition(ConnectionTrace.Step.EASYCONN_NSD_RESULT, "FOUND ${nsd.host.hostAddress}:${nsd.port}")
             probeTarget(nsd.host, nsd.port, myIp, network, attempts = 3)
             if (probed) return
             // SoftAP: wake sometimes only re-arms mDNS — try NSD once more before falling through.
@@ -405,12 +410,17 @@ class EasyConnProber(
             val nsd2 = EasyConnDiscovery.discoverNsd(context, log)
             if (!running) return
             if (nsd2 != null) {
+                log("NSD (2nd attempt): FOUND ${nsd2.host.hostAddress}:${nsd2.port}")
                 probeTarget(nsd2.host, nsd2.port, myIp, network, attempts = 3)
                 if (probed) return
             }
+        } else {
+            log("NSD: NOT FOUND")
+            ConnectionTrace.transition(ConnectionTrace.Step.EASYCONN_NSD_RESULT, "NOT FOUND")
         }
 
         // Classic wake port on the SoftAP / P2P gateway.
+        log("10930: checking ${bikeIp.hostAddress}:$BIKE_PROBE_PORT ...")
         probeTarget(bikeIp, BIKE_PROBE_PORT, myIp, network, attempts = 5)
         if (probed || !running) return
 
@@ -451,6 +461,12 @@ class EasyConnProber(
                         "refused, nearby ports quiet) and Yunmo :${YunmoFrame.DEFAULT_PORT} also failed. " +
                         "Keep Nav QR open on the dash. If this is Kove/Thinkerride, check " +
                         "[DISC] thinkerride-scan in Share Logs.",
+                )
+                ConnectionTrace.fail(
+                    failedStep = ConnectionTrace.Step.EASYCONN_10930_RESULT,
+                    reason = "EasyConn never answered on port $BIKE_PROBE_PORT",
+                    dashIp = bikeIp.hostAddress,
+                    port = BIKE_PROBE_PORT,
                 )
                 ConnectionState.set(
                     Phase.ERROR,
@@ -513,20 +529,31 @@ class EasyConnProber(
                 val sock = openOnBikeNetwork(network, myIp)
                 sock.connect(InetSocketAddress(host, port), 3000)
                 sock.soTimeout = 5000
+                log("10930: OPEN on ${host.hostAddress}:$port")
+                ConnectionTrace.transition(ConnectionTrace.Step.EASYCONN_10930_RESULT, "OPEN on ${host.hostAddress}:$port")
 
                 val json = JSONProbe()
-                log("[PROBE] -> MDNS_RESPOND (0x70000010) $json")
+                log("TX: target=${host.hostAddress}:$port cmd=0x70000010 payload=$json")
+                ConnectionTrace.transition(
+                    ConnectionTrace.Step.MDNS_PROBE_SENT,
+                    "target=${host.hostAddress}:$port, payload=$json",
+                )
                 PxcFrame(PxcFrame.CMD_MDNS_RESPOND, json.toByteArray(Charsets.UTF_8))
                     .write(sock.getOutputStream())
 
                 val resp = PxcFrame.read(sock.getInputStream())
                 if (resp == null) {
-                    log("[PROBE] bike closed before responding")
+                    log("RX: bike closed before responding")
                 } else {
                     val body = String(resp.payload, Charsets.UTF_8)
-                    log("[PROBE] <- cmd=0x${resp.cmd.toUInt().toString(16)} $body")
+                    log("RX: cmd=0x${resp.cmd.toUInt().toString(16)} payload=$body")
+                    ConnectionTrace.transition(
+                        ConnectionTrace.Step.MDNS_PROBE_RESPONSE,
+                        "cmd=0x${resp.cmd.toUInt().toString(16)}, payload=$body",
+                    )
                     if (resp.cmd == PxcFrame.CMD_MDNS_RESPOND_ACK && body.contains("true")) {
                         log("[PROBE] *** accepted — bike should now connect back to our ports ***")
+                        ConnectionState.set(Phase.PXC_CONNECTING, "Waiting for motorcycle...")
                         probed = true
                     } else {
                         log("[PROBE] !! not accepted: $body")
@@ -539,11 +566,16 @@ class EasyConnProber(
                 if (everConnected) {
                     log("!! ignoring VPN bind blip — bike already linked this session; will retry")
                 } else {
+                    ConnectionTrace.fail(
+                        failedStep = ConnectionTrace.Step.MDNS_PROBE_SENT,
+                        reason = e.message ?: "VPN kill-switch",
+                    )
                     ConnectionState.set(Phase.ERROR, "VPN kill-switch blocking bike Wi‑Fi")
                     return
                 }
             } catch (e: Exception) {
-                log("[PROBE] failed: ${e.javaClass.simpleName}: ${e.message}")
+                log("10930: ${e.javaClass.simpleName}: ${e.message}")
+                ConnectionTrace.transition(ConnectionTrace.Step.EASYCONN_10930_RESULT, "FAIL ${e.javaClass.simpleName}: ${e.message}")
             }
             try { Thread.sleep(750L * attempt) } catch (_: InterruptedException) { return }
         }
@@ -609,7 +641,12 @@ class EasyConnProber(
                 val client = try { server.accept() } catch (e: IOException) {
                     if (running) log("[:$port] accept ended: ${e.message}"); break
                 }
-                log("[:$port] <<< bike connected from ${client.remoteSocketAddress}")
+                log("BIKE CALLBACK :$port FROM ${client.remoteSocketAddress}")
+                when (port) {
+                    PORT_PXC_CTRL -> ConnectionTrace.transition(ConnectionTrace.Step.BIKE_CALLBACK_10922, "from ${client.remoteSocketAddress}")
+                    PORT_MEDIA_CTRL -> ConnectionTrace.transition(ConnectionTrace.Step.BIKE_CALLBACK_10921, "from ${client.remoteSocketAddress}")
+                    PORT_MEDIA_DATA -> ConnectionTrace.transition(ConnectionTrace.Step.BIKE_CALLBACK_10920, "from ${client.remoteSocketAddress}")
+                }
                 everConnected = true
                 reconnectAttempts = 0            // a fresh connection resets the retry budget
                 liveConns.incrementAndGet()

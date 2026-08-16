@@ -78,9 +78,9 @@ object ConnectionState {
         when (newPhase) {
             Phase.IDLE, Phase.STOPPED -> ConnectionTrace.transition(ConnectionTrace.Step.APP_STARTED)
             Phase.STARTING_AA -> ConnectionTrace.transition(ConnectionTrace.Step.QR_AVAILABLE, d)
-            Phase.JOINING_WIFI -> ConnectionTrace.transition(ConnectionTrace.Step.P2P_CONNECTION_STARTED, d)
+            Phase.JOINING_WIFI -> ConnectionTrace.transition(ConnectionTrace.Step.P2P_CONNECTION_REQUESTED, d)
             Phase.AA_VIDEO_LIVE -> ConnectionTrace.transition(ConnectionTrace.Step.P2P_CONNECTED, d)
-            Phase.PXC_CONNECTING -> ConnectionTrace.transition(ConnectionTrace.Step.PXC_SOCKET_OPEN, d)
+            Phase.PXC_CONNECTING -> ConnectionTrace.transition(ConnectionTrace.Step.PXC_SERVER_10922_BOUND, d)
             Phase.STREAMING, Phase.MIRRORING -> ConnectionTrace.transition(ConnectionTrace.Step.CONNECTED, d)
             Phase.ERROR -> ConnectionTrace.fail(ConnectionTrace.currentStep, if (d.isNotBlank()) d else "Unexpected error")
             else -> {}

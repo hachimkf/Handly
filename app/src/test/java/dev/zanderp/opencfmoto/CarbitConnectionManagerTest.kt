@@ -37,9 +37,9 @@ class CarbitConnectionManagerTest {
         assertFalse(ConnectionTrace.currentStep == ConnectionTrace.Step.CONNECTED)
 
         // 2. Handshake & Client Info
-        ConnectionTrace.transition(ConnectionTrace.Step.PXC_SOCKET_OPEN, "192.168.49.1:10922")
+        ConnectionTrace.transition(ConnectionTrace.Step.PXC_SERVER_10922_BOUND, "192.168.49.1:10922")
         ConnectionTrace.transition(ConnectionTrace.Step.CLIENT_INFO_SENT)
-        ConnectionTrace.transition(ConnectionTrace.Step.CLIENT_INFO_RESPONSE_RECEIVED, "HUID=12345, Sware=V1.7, Hware=V1.5")
+        ConnectionTrace.transition(ConnectionTrace.Step.CLIENT_INFO_RECEIVED, "HUID=12345, Sware=V1.7, Hware=V1.5")
         ConnectionTrace.transition(ConnectionTrace.Step.HEARTBEAT_STARTED)
         ConnectionTrace.transition(ConnectionTrace.Step.MEDIA_CHANNEL_OPEN, "192.168.49.1:10920")
         ConnectionTrace.transition(ConnectionTrace.Step.PROJECTION_READY)

@@ -83,11 +83,14 @@ object BikeWifiP2p {
         val chan = mgr.initialize(ctx, Looper.getMainLooper(), null)
         channel = chan
 
+        val rawMac = normalizeMac(qr.mac)
+        val expectedWifiMac = rawMac?.let { if (it.startsWith("dd:", ignoreCase = true)) "dc:" + it.substring(3) else it }
         log("$TAG starting Wi-Fi Direct connect")
-        log("$TAG   qr ssid='${qr.ssid}' mac=${qr.mac} action=${qr.action} (p2p=${qr.supportsP2p} ap=${qr.supportsAp})")
+        log("$TAG   QR MAC: ${qr.mac ?: "none"} | Expected Wi-Fi MAC: ${expectedWifiMac ?: "none"}")
+        log("$TAG   QR SSID: '${qr.ssid}' action=${qr.action} (p2p=${qr.supportsP2p} ap=${qr.supportsAp})")
         log("$TAG   expecting bike GO at 192.168.49.1; phone will be a P2P client")
 
-        ConnectionTrace.transition(ConnectionTrace.Step.P2P_DISCOVERY_STARTED, "mac=${qr.mac}")
+        ConnectionTrace.transition(ConnectionTrace.Step.P2P_DISCOVERY_STARTED, "mac=${qr.mac}, expected=$expectedWifiMac")
         registerReceiver(ctx, mgr, chan, qr, onConnected, onFailed, log)
 
         // Peer discovery is required on many phones before connect(), and surfaces the bike so we
@@ -105,8 +108,7 @@ object BikeWifiP2p {
         if (qr.ssid.startsWith("DIRECT-", ignoreCase = true)) {
             attemptCredentialJoin(mgr, chan, qr, log)
         } else {
-            log("$TAG SSID '${qr.ssid}' is not DIRECT-* — joining by QR MAC / discovered peer")
-            attemptMacJoin(mgr, chan, qr, log)
+            log("$TAG SSID '${qr.ssid}' is not DIRECT-* — scanning for motorcycle peer")
         }
 
         startTimeout(onFailed, log)
@@ -174,6 +176,10 @@ object BikeWifiP2p {
         }
         log("$TAG connect(): joining discovered peer '${device.deviceName}' (${device.deviceAddress}) [WPS=${config.wps.setup}] …")
         connectIssued = true
+        ConnectionTrace.transition(
+            ConnectionTrace.Step.P2P_CONNECTION_REQUESTED,
+            "peer=${device.deviceName} (${device.deviceAddress})",
+        )
         mgr.connect(chan, config, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 log("$TAG connect(): request accepted — waiting for group formation")
@@ -214,6 +220,10 @@ object BikeWifiP2p {
         }
         log("$TAG connect(): attempting direct join to MAC=$mac (client role) …")
         connectIssued = true
+        ConnectionTrace.transition(
+            ConnectionTrace.Step.P2P_CONNECTION_REQUESTED,
+            "direct MAC=$mac",
+        )
         mgr.connect(chan, config, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 log("$TAG connect(): MAC request accepted — waiting for group to form")
@@ -262,8 +272,8 @@ object BikeWifiP2p {
                             var matched: WifiP2pDevice? = null
                             for (d: WifiP2pDevice in peers.deviceList) {
                                 log(
-                                    "$TAG peer: name='${d.deviceName}' addr=${d.deviceAddress} " +
-                                        "status=${deviceStatus(d.status)} isGO=${d.isGroupOwner}",
+                                    "$TAG P2P DEVICE NAME: '${d.deviceName}' | P2P DEVICE ADDRESS: ${d.deviceAddress} | " +
+                                        "P2P STATUS: ${deviceStatus(d.status)} | isGO: ${d.isGroupOwner}",
                                 )
                                 val peerMac = normalizeMac(d.deviceAddress)
                                 if (wantMac != null && peerMac != null && macMatches(wantMac, peerMac)) {
@@ -281,6 +291,7 @@ object BikeWifiP2p {
                             log(
                                 "$TAG found matching motorcycle peer '${peer.deviceName}' (${peer.deviceAddress}) — connecting",
                             )
+                            ConnectionState.set(Phase.JOINING_WIFI, "Connecting Wi-Fi Direct...")
                             ConnectionTrace.transition(
                                 ConnectionTrace.Step.P2P_DEVICE_FOUND,
                                 "${peer.deviceName} (${peer.deviceAddress})",
@@ -290,12 +301,14 @@ object BikeWifiP2p {
                     }
                     WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
                         mgr.requestConnectionInfo(chan) { info ->
-                            log("$TAG conn: groupFormed=${info.groupFormed} isGO=${info.isGroupOwner} " +
-                                "goAddr=${info.groupOwnerAddress?.hostAddress}")
+                            log(
+                                "$TAG GROUP FORMED: ${info.groupFormed} | PHONE IS GROUP OWNER: ${info.isGroupOwner} | " +
+                                    "GROUP OWNER IP: ${info.groupOwnerAddress?.hostAddress}",
+                            )
                             if (info.groupFormed && !connected) {
                                 ConnectionTrace.transition(
                                     ConnectionTrace.Step.P2P_CONNECTED,
-                                    "GO=${info.groupOwnerAddress?.hostAddress}",
+                                    "GO=${info.groupOwnerAddress?.hostAddress}, isGO=${info.isGroupOwner}",
                                 )
                                 onGroupFormed(mgr, chan, info, onConnected, onFailed, log)
                             }
@@ -354,7 +367,7 @@ object BikeWifiP2p {
     ) {
         if (info.isGroupOwner) {
             // We should be the client, not the GO. If we became GO the bike won't connect back.
-            log("$TAG !! WE became the Group Owner â€” the bike is expected to be the GO. " +
+            log("$TAG !! WE became the Group Owner — the bike is expected to be the GO. " +
                 "This usually means the join fell back to creating a new group. Share this log.")
         }
         val gateway = info.groupOwnerAddress as? Inet4Address
@@ -375,14 +388,21 @@ object BikeWifiP2p {
                 if (!active || connected) return@thread
                 connected = true
                 cancelTimeout()
-                log("$TAG *** connected: phone=${bindIp.hostAddress} bike(GO)=${gateway.hostAddress} — starting PXC ***")
+                log("$TAG *** P2P LINK READY ***")
+                log("$TAG   GO IP (Bike) = ${gateway.hostAddress}")
+                log("$TAG   PHONE P2P IP = ${bindIp.hostAddress}")
+                log("$TAG   INTERFACE    = $iface")
                 ConnectionTrace.transition(
-                    ConnectionTrace.Step.NETWORK_AVAILABLE,
-                    "Phone=${bindIp.hostAddress}, Dash=${gateway.hostAddress}",
+                    ConnectionTrace.Step.PHONE_IP_DISCOVERED,
+                    bindIp.hostAddress ?: "",
                 )
                 ConnectionTrace.transition(
                     ConnectionTrace.Step.DASH_IP_DISCOVERED,
                     gateway.hostAddress ?: "192.168.49.1",
+                )
+                ConnectionTrace.transition(
+                    ConnectionTrace.Step.NETWORK_AVAILABLE,
+                    "Phone=${bindIp.hostAddress}, Dash=${gateway.hostAddress}",
                 )
                 onConnected(bindIp, gateway)
             }

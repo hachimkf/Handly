@@ -65,7 +65,7 @@ object CarbitConnectionManager {
         BikeMemory.save(appCtx, raw, qr)
 
         val bikeName = BikeMemory.lastBikeName(appCtx) ?: qr.name ?: qr.ssid
-        ConnectionState.set(Phase.JOINING_WIFI, bikeName)
+        ConnectionState.set(Phase.JOINING_WIFI, "Finding motorcycle...")
 
         val pr = EasyConnProber(appCtx, LogBus::log)
         prober = pr
@@ -126,9 +126,7 @@ object CarbitConnectionManager {
             onConnected = { bindIp, gatewayIp ->
                 WifiGate.cancelNotification(context)
                 LogBus.log("$TAG P2P connected: phone=${bindIp.hostAddress} dash=${gatewayIp.hostAddress}")
-                ConnectionState.set(Phase.PXC_CONNECTING)
-                ConnectionTrace.transition(ConnectionTrace.Step.PXC_SOCKET_OPEN, "${gatewayIp.hostAddress}:10922")
-                ConnectionTrace.transition(ConnectionTrace.Step.PXC_HANDSHAKE_STARTED)
+                ConnectionState.set(Phase.PXC_CONNECTING, "Establishing Carbit link...")
 
                 try {
                     pr.start(
@@ -139,7 +137,7 @@ object CarbitConnectionManager {
                 } catch (e: Exception) {
                     LogBus.log("$TAG prober start failed: ${e.message}")
                     ConnectionTrace.fail(
-                        failedStep = ConnectionTrace.Step.PXC_SOCKET_OPEN,
+                        failedStep = ConnectionTrace.Step.PXC_SERVER_10922_BOUND,
                         reason = "PXC socket start failed: ${e.message}",
                         dashIp = gatewayIp.hostAddress,
                         port = 10922,
@@ -154,7 +152,7 @@ object CarbitConnectionManager {
                     connectSoftAp(context, qr, pr)
                 } else {
                     ConnectionTrace.fail(
-                        failedStep = ConnectionTrace.Step.P2P_CONNECTION_STARTED,
+                        failedStep = ConnectionTrace.Step.P2P_CONNECTION_REQUESTED,
                         reason = "P2P_CONNECTION_FAILED: $reason",
                         dashIp = "192.168.49.1",
                     )
@@ -174,16 +172,14 @@ object CarbitConnectionManager {
             onAvailable = { network ->
                 WifiGate.cancelNotification(context)
                 LogBus.log("$TAG SoftAP Wi-Fi bound; starting EasyConn PXC flow...")
-                ConnectionState.set(Phase.PXC_CONNECTING)
-                ConnectionTrace.transition(ConnectionTrace.Step.PXC_SOCKET_OPEN, ":10922")
-                ConnectionTrace.transition(ConnectionTrace.Step.PXC_HANDSHAKE_STARTED)
+                ConnectionState.set(Phase.PXC_CONNECTING, "Establishing Carbit link...")
 
                 try {
                     pr.start(network ?: BikeWifi.currentNetwork)
                 } catch (e: Exception) {
                     LogBus.log("$TAG prober start failed: ${e.message}")
                     ConnectionTrace.fail(
-                        failedStep = ConnectionTrace.Step.PXC_SOCKET_OPEN,
+                        failedStep = ConnectionTrace.Step.PXC_SERVER_10922_BOUND,
                         reason = "PXC socket start failed: ${e.message}",
                         port = 10922,
                     )
