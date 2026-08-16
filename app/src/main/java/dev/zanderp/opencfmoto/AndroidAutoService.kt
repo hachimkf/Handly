@@ -232,41 +232,8 @@ class AndroidAutoService : Service() {
      * a tap-to-resume notification — [MainActivity] then finishes from the foreground (BAL-safe).
      */
     private fun doResume() {
-        if (!aaParked) return
-        aaParked = false
-        wifiDownSince = 0L
-        resumeSteadyReached = false
-        LogBus.log("[AA] bike Wi-Fi back — resuming Android Auto (auto attempt)")
-        // Reset the trailing detail (the park set it to "will resume…") back to the bike name so it
-        // doesn't linger onto STREAMING as "Connected … — will resume when the bike is back".
-        ConnectionState.set(Phase.STARTING_AA, BikeMemory.lastBikeName(applicationContext) ?: "")
-        reacquireLocks()
-        updateNotification(getString(R.string.notif_aa_title), getString(R.string.notif_aa_reconnecting))
-
-        startReceiver()
-        if (receiver == null) { resumeFailedFallback(); return }
-
-        BikeLink.beginHandoff(this)
-        AaVideoBridge.onSteadyVideo = {
-            AaVideoBridge.onSteadyVideo = null
-            resumeSteadyReached = true
-            ConnectionState.set(Phase.AA_VIDEO_LIVE)
-            LogBus.log("→ Android Auto video is live (resume)")
-            BikeLink.markAaVideoSteady()
-        }
-        BikeLink.markWifiReady(BikeWifi.currentNetwork)
-        dev.zanderp.opencfmoto.aa.AaSelfMode.trigger(applicationContext, log = LogBus::log)
-
-        // If AA can't self-start from the background (BAL), retry once then hand off to the foreground.
-        watchdogHandler.postDelayed({
-            if (!isRunning || aaParked || resumeSteadyReached) return@postDelayed
-            LogBus.log("[AA] resume: no AA video yet — re-triggering self-mode once")
-            dev.zanderp.opencfmoto.aa.AaSelfMode.trigger(applicationContext, log = LogBus::log)
-            watchdogHandler.postDelayed({
-                if (!isRunning || aaParked || resumeSteadyReached) return@postDelayed
-                resumeFailedFallback()
-            }, RESUME_STEADY_TIMEOUT_MS)
-        }, RESUME_STEADY_TIMEOUT_MS)
+        // Disabled: Android Auto is only started upon explicit rider navigation tap.
+        LogBus.log("[AA] auto-resume disabled; waiting for user navigation action")
     }
 
     /** Background AA relaunch was blocked — park again (battery) and prompt the rider to tap to resume. */
@@ -691,10 +658,9 @@ class AndroidAutoService : Service() {
         /** True while AA is parked (torn down, waiting for the bike's Wi-Fi to return). */
         val isParked: Boolean get() = active?.aaParked == true
 
-        /** Ask a parked service to rebuild AA and reconnect (called by [BikeWifi] on AP re-acquire). */
+        /** Ask a parked service to rebuild AA and reconnect (disabled in Handly). */
         fun requestResume() {
-            val svc = active ?: return
-            svc.watchdogHandler.post { svc.doResume() }
+            // Disabled: Android Auto must only be started via explicit user navigation action.
         }
 
         /**
