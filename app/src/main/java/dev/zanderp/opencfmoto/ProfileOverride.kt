@@ -18,6 +18,7 @@ enum class ProfileOverride(val id: String, val shortLabel: String, val detail: S
     CFDL26_LAND("cfdl26_land", "800MT", "CFDL26 landscape touch", R.string.pref_profile_cfdl26_land),
     CFDL26_PORT("cfdl26_port", "1000 MT-X", "CFDL26 portrait (handlebar-primary)", R.string.pref_profile_cfdl26_port),
     CLC450("clc450", "CL‑C450", "544×512 near-square", R.string.pref_profile_clc450),
+    GENERIC_CARBIT("generic_carbit", "Carbit Ride", "Generic Carbit (Sware v1.7 / Hware v1.5 compatible)", R.string.pref_profile_generic_carbit),
     ;
 
     fun resolve(): BikeProfile? = when (this) {
@@ -28,6 +29,7 @@ enum class ProfileOverride(val id: String, val shortLabel: String, val detail: S
         CFDL26_LAND -> Cfdl26LandscapeProfile
         CFDL26_PORT -> Cfdl26PortraitProfile
         CLC450 -> ClC450Profile
+        GENERIC_CARBIT -> GenericCarbitProfile
     }
 
     companion object {

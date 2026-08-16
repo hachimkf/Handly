@@ -118,4 +118,28 @@ object NavLauncher {
             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
             Uri.parse("package:${context.packageName}"),
         )
+
+    fun launchGoogleMaps(context: Context): Boolean {
+        return try {
+            val intent = context.packageManager.getLaunchIntentForPackage(MAPS_PKG)
+                ?: Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun launchWaze(context: Context): Boolean {
+        return try {
+            val intent = context.packageManager.getLaunchIntentForPackage("com.waze")
+                ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://waze.com/ul"))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
 }

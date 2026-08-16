@@ -17,6 +17,9 @@ import android.text.method.LinkMovementMethod
 import android.text.method.ScrollingMovementMethod
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -29,6 +32,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.button.MaterialButton
+import dev.zanderp.opencfmoto.navigation.NavigationLauncher
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,17 +40,13 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var logView: TextView
-    private lateinit var logScroll: ScrollView
-    private lateinit var logPanel: View
-    private lateinit var tipsPanel: View
-    private lateinit var statusView: TextView
-    private lateinit var statusIcon: android.widget.ImageView
-    private lateinit var statusProgress: View
-    private lateinit var bikeView: TextView
-    private lateinit var connectBtn: Button
-    private lateinit var toggleLogBtn: Button
+    private var logView: TextView? = null
+    private var logScroll: ScrollView? = null
+    private var logPanel: View? = null
+    private var tipsPanel: View? = null
+    private lateinit var connectBtn: com.google.android.material.button.MaterialButton
     private lateinit var prober: EasyConnProber
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var bleWakeUp: BleWakeUp? = null
     private val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     /** True when the pending QR scan should kick off the Android Auto flow (vs the mirror path). */
@@ -204,7 +204,7 @@ class MainActivity : AppCompatActivity() {
             // safe on Android 12+/15), after giving the service's :5288 server time to bind.
             // AA 16.4+/17.4+ often need the broadcast fallbacks; retry once if video never arrives
             // (common when the first WirelessStartupReceiver is ignored).
-            logView.postDelayed({
+            mainHandler.postDelayed({
                 try {
                     dev.zanderp.opencfmoto.aa.AaSelfMode.trigger(this, log = ::log)
                 } catch (e: Exception) {
@@ -213,7 +213,7 @@ class MainActivity : AppCompatActivity() {
             }, 900)
             // Additive retry for AA 16.4+/17.4+ that ignore the first broadcast — skipped if
             // a session is already live (re-firing START_WIRELESS_PROJECTION kills AAP).
-            logView.postDelayed({
+            mainHandler.postDelayed({
                 if (aaAlreadyLiveOrTerminal()) {
                     if (AaVideoBridge.aaSessionLive || AaVideoBridge.aaDecoding) {
                         log("[AA] skip re-trigger — AA already connected/decoding")
@@ -228,7 +228,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }, 4_500)
             // Give up the silent black/QR reconnect loop — surface a clear error after several tries.
-            logView.postDelayed({
+            mainHandler.postDelayed({
                 val p = ConnectionState.phase
                 if (p == Phase.IDLE || p == Phase.STOPPED || p == Phase.ERROR ||
                     p == Phase.STREAMING || p == Phase.MIRRORING
@@ -377,14 +377,14 @@ class MainActivity : AppCompatActivity() {
                         ProjectionService.stop(this@MainActivity)
                     }
                 } else if (tries++ < maxTries) {
-                    logView.postDelayed(this, 100)
+                    mainHandler.postDelayed(this, 100)
                 } else {
                     log("foreground service did not start within 5s — aborting mirror")
                     ProjectionService.stop(this@MainActivity)
                 }
             }
         }
-        logView.post(poll)
+        mainHandler.post(poll)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -392,84 +392,43 @@ class MainActivity : AppCompatActivity() {
         AppSettings.applyToHolder(this)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main_root)) { v, insets ->
             val b = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(b.left, b.top, b.right, b.bottom)
             insets
         }
 
+        if (!OnboardingActivity.hasCompleted(this)) {
+            OnboardingActivity.start(this)
+        }
+
+        connectBtn = findViewById(R.id.btn_connect)
         logView = findViewById(R.id.log_view)
         logScroll = findViewById(R.id.log_scroll)
         logPanel = findViewById(R.id.log_panel)
         tipsPanel = findViewById(R.id.tips_panel)
-        statusView = findViewById(R.id.status_view)
-        statusIcon = findViewById(R.id.status_icon)
-        statusProgress = findViewById(R.id.status_progress)
-        bikeView = findViewById(R.id.bike_view)
-        connectBtn = findViewById(R.id.btn_connect)
-        toggleLogBtn = findViewById(R.id.btn_toggle_log)
-        logView.movementMethod = ScrollingMovementMethod()
-
-        // Icons are set here rather than in XML: in this AGP/compileSdk setup, library (res-auto)
-        // attributes like app:icon don't resolve in layouts, so we assign them programmatically.
-        (connectBtn as? MaterialButton)?.setIconResource(R.drawable.ic_power)
-        findViewById<android.widget.TextView>(R.id.brand_version).text =
-            "v${BuildConfig.VERSION_NAME}"
-        // Scan / Map / Mirror: icon on top (Tile style). maxLines=1 + autoSize keeps labels
-        // horizontal on narrow phones / large system font (Samsung S22 report).
-        fun MaterialButton.asIconTopTile(iconRes: Int) {
-            setIconResource(iconRes)
-            iconGravity = MaterialButton.ICON_GRAVITY_TOP
-            iconPadding = resources.getDimensionPixelSize(R.dimen.btn_tile_icon_padding)
-            maxLines = 1
-            isSingleLine = true
-        }
-        (findViewById<View>(R.id.btn_aa_start) as? MaterialButton)?.asIconTopTile(R.drawable.ic_qr)
-        (findViewById<View>(R.id.btn_gpx) as? MaterialButton)?.asIconTopTile(R.drawable.ic_place)
-        (findViewById<View>(R.id.btn_mirror_start) as? MaterialButton)?.asIconTopTile(R.drawable.ic_cast)
-        (findViewById<View>(R.id.btn_aa_stop) as? MaterialButton)?.setIconResource(R.drawable.ic_stop)
-        (findViewById<View>(R.id.btn_hud_view) as? MaterialButton)?.apply {
-            setIconResource(R.drawable.ic_cast)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            maxLines = 1
-        }
-        (findViewById<View>(R.id.btn_controls) as? MaterialButton)?.apply {
-            setIconResource(R.drawable.ic_devices)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            maxLines = 1
-        }
-        // Footer 2×2 — icon + label (same pattern as Dash view / Controls).
-        fun MaterialButton.asFooterLink(iconRes: Int) {
-            setIconResource(iconRes)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            iconPadding = (6 * resources.displayMetrics.density).toInt()
-            iconSize = (18 * resources.displayMetrics.density).toInt()
-            setIconTintResource(R.color.text_secondary)
-            maxLines = 1
-            isSingleLine = true
-        }
-        (findViewById<View>(R.id.btn_setup) as? MaterialButton)?.asFooterLink(R.drawable.ic_settings)
-        (findViewById<View>(R.id.btn_devices) as? MaterialButton)?.asFooterLink(R.drawable.ic_devices)
-        (findViewById<View>(R.id.btn_trip) as? MaterialButton)?.asFooterLink(R.drawable.ic_ride)
-        (toggleLogBtn as? MaterialButton)?.asFooterLink(R.drawable.ic_logs)
 
         // All components (bike PXC, Android Auto receiver, video pipeline — including those
         // running in the foreground service) log through LogBus; mirror it into the view.
         LogBus.listener = { line ->
             runOnUiThread {
-                logView.append("$line\n")
-                logScroll.post { logScroll.fullScroll(ScrollView.FOCUS_DOWN) }
+                try {
+                    logView?.append("$line\n")
+                    logScroll?.post { logScroll?.fullScroll(ScrollView.FOCUS_DOWN) }
+                } catch (_: Exception) {}
             }
         }
         // Application already hydrated a prior session/crash into LogBus — show it in the view.
         val prior = LogBus.snapshot()
         if (prior.isNotBlank()) {
-            logView.text = prior
-            logScroll.post { logScroll.fullScroll(ScrollView.FOCUS_DOWN) }
+            try {
+                logView?.text = prior
+                logScroll?.post { logScroll?.fullScroll(ScrollView.FOCUS_DOWN) }
+            } catch (_: Exception) {}
         }
         maybeShowCrashRecovery()
         // Soft dep check after auto-connect has had time to start — never race Connect.
-        logView.postDelayed({ DependencyPrompt.showOnLaunchIfNeeded(this) }, 2500)
+        window.decorView.postDelayed({ DependencyPrompt.showOnLaunchIfNeeded(this) }, 2500)
         // Opening the home screen must not resume a killed NAV_TO (looks like "Arrived at X").
         val startingGpx = intent?.getBooleanExtra(EXTRA_START_GPX, false) == true
         val projecting = ConnectionState.phase == Phase.STREAMING ||
@@ -479,7 +438,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (startingGpx) {
             intent.removeExtra(EXTRA_START_GPX)
-            logView.post { beginGpxProjection() }
+            window.decorView.post { beginGpxProjection() }
         }
 
         // Reflect the coarse connection state in the big status header (so users don't read the log).
@@ -530,23 +489,35 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.btn_aa_start).setOnClickListener { startAaScan() }
-
-        findViewById<Button>(R.id.btn_mirror_start).setOnClickListener { onMirrorPressed() }
-        findViewById<View>(R.id.btn_gpx).setOnClickListener { onMapPressed() }
-        findViewById<Button>(R.id.btn_aa_stop).setOnClickListener { stopEverything() }
-
-        toggleLogBtn.setOnClickListener {
-            val show = logPanel.visibility != View.VISIBLE
-            logPanel.visibility = if (show) View.VISIBLE else View.GONE
-            // The tips panel and the log panel share the flexible space, so only one shows at a time.
-            tipsPanel.visibility = if (show) View.GONE else View.VISIBLE
-            toggleLogBtn.text = if (show) getString(R.string.main_hide_logs) else getString(R.string.main_logs)
+        findViewById<View>(R.id.btn_settings)?.setOnClickListener { SettingsActivity.start(this) }
+        findViewById<View>(R.id.btn_open_nav)?.setOnClickListener {
+            showNavigationChooser()
+        }
+        findViewById<View>(R.id.btn_nav_gmaps)?.setOnClickListener {
+            NavigationLauncher.openGoogleMaps(this)
+        }
+        findViewById<View>(R.id.btn_nav_waze)?.setOnClickListener {
+            NavigationLauncher.openWaze(this)
+        }
+        findViewById<View>(R.id.btn_disconnect)?.setOnClickListener {
+            stopEverything()
         }
 
-        findViewById<View>(R.id.btn_hud_view).setOnClickListener { startActivity(Intent(this, HudViewActivity::class.java)) }
-        findViewById<View>(R.id.btn_controls).setOnClickListener { startActivity(Intent(this, ControlsActivity::class.java)) }
-        findViewById<Button>(R.id.btn_navigate).setOnClickListener { navigateToTyped() }
+        findViewById<View>(R.id.btn_aa_start)?.setOnClickListener { startAaScan() }
+        findViewById<View>(R.id.btn_mirror_start)?.setOnClickListener { onMirrorPressed() }
+        findViewById<View>(R.id.btn_gpx)?.setOnClickListener { onMapPressed() }
+        findViewById<View>(R.id.btn_aa_stop)?.setOnClickListener { stopEverything() }
+
+        findViewById<View>(R.id.btn_toggle_log)?.setOnClickListener {
+            val show = logPanel?.visibility != View.VISIBLE
+            logPanel?.visibility = if (show) View.VISIBLE else View.GONE
+            // The tips panel and the log panel share the flexible space, so only one shows at a time.
+            tipsPanel?.visibility = if (show) View.GONE else View.VISIBLE
+        }
+
+        findViewById<View>(R.id.btn_hud_view)?.setOnClickListener { startActivity(Intent(this, HudViewActivity::class.java)) }
+        findViewById<View>(R.id.btn_controls)?.setOnClickListener { startActivity(Intent(this, ControlsActivity::class.java)) }
+        findViewById<Button>(R.id.btn_navigate)?.setOnClickListener { navigateToTyped() }
         val destField = findViewById<android.widget.EditText>(R.id.et_destination)
         destField?.setOnEditorActionListener { _, _, _ ->
             navigateToTyped(); true
@@ -612,18 +583,15 @@ class MainActivity : AppCompatActivity() {
                 debounce.postDelayed(run, 350)
             }
         })
-        findViewById<View>(R.id.btn_devices).setOnClickListener { GarageActivity.start(this) }
-
-        findViewById<View>(R.id.btn_trip).setOnClickListener { TripActivity.start(this) }
-
-        findViewById<Button>(R.id.btn_share_log).setOnClickListener { shareLog() }
-
-        findViewById<Button>(R.id.btn_setup).setOnClickListener { SetupActivity.start(this) }
-        findViewById<View>(R.id.brand_title).setOnClickListener { AboutActivity.start(this) }
-        findViewById<View>(R.id.btn_about_page).setOnClickListener { AboutActivity.start(this) }
-        findViewById<View>(R.id.btn_check_update).setOnClickListener { checkUpdateManual() }
-        findViewById<View>(R.id.btn_problem_report).setOnClickListener { reportProblem() }
-        findViewById<View>(R.id.btn_donate).setOnClickListener {
+        findViewById<View>(R.id.btn_devices)?.setOnClickListener { GarageActivity.start(this) }
+        findViewById<View>(R.id.btn_trip)?.setOnClickListener { TripActivity.start(this) }
+        findViewById<View>(R.id.btn_share_log)?.setOnClickListener { shareLog() }
+        findViewById<View>(R.id.btn_setup)?.setOnClickListener { SetupActivity.start(this) }
+        findViewById<View>(R.id.brand_title)?.setOnClickListener { AboutActivity.start(this) }
+        findViewById<View>(R.id.btn_about_page)?.setOnClickListener { AboutActivity.start(this) }
+        findViewById<View>(R.id.btn_check_update)?.setOnClickListener { checkUpdateManual() }
+        findViewById<View>(R.id.btn_problem_report)?.setOnClickListener { reportProblem() }
+        findViewById<View>(R.id.btn_donate)?.setOnClickListener {
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AboutActivity.URL_KOFI)))
             } catch (_: Exception) {
@@ -631,19 +599,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.btn_clear).setOnClickListener {
+        findViewById<View>(R.id.btn_clear)?.setOnClickListener {
             LogBus.clear()
             CrashGuard.clearSession(this)
-            logView.text = ""
+            logView?.text = ""
             LogBus.logSessionBanner()
         }
 
-        log("Ready. Tap Connect to project Android Auto to your dash.")
+        log("Ready. Tap Connect to project to your dash.")
 
-        // First launch: walk the user through the one-time prerequisites.
         try {
-            if (!SetupActivity.hasSeen(this)) SetupActivity.start(this)
-            else maybeAutoConnect()
+            if (OnboardingActivity.hasCompleted(this)) maybeAutoConnect()
             maybeResumeFromParked(intent)
         } catch (e: Exception) {
             log("startup failed (UI still up): $e")
@@ -673,9 +639,7 @@ class MainActivity : AppCompatActivity() {
         refreshBikeLabel()
         renderStatus(ConnectionState.phase, ConnectionState.detail)
         if (WifiGate.isWifiEnabled(this)) WifiGate.cancelNotification(this)
-        // Retry auto-connect on resume: after finishing first-run setup, or once the bike's Wi-Fi
-        // comes into range shortly after launch. Guarded so it only ever starts one attempt.
-        if (SetupActivity.hasSeen(this)) maybeAutoConnect()
+        if (OnboardingActivity.hasCompleted(this)) maybeAutoConnect()
         maybeCheckUpdate()
         maybeResumeFromParked(intent)
     }
@@ -815,57 +779,89 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Update the big status header + Connect button label from a [ConnectionState] transition. */
+    /** Update the cockpit status header + Connect button label from a [ConnectionState] transition. */
     private fun renderStatus(phase: Phase, detail: String) {
-        statusView.text = getString(phase.labelRes)
-        bikeView.text = if (detail.isNotBlank()) detail else bikeLabelText()
+        val orbContainer = findViewById<FrameLayout>(R.id.orb_container)
+        val orbIcon = findViewById<ImageView>(R.id.orb_icon)
+        val orbProgress = findViewById<ProgressBar>(R.id.orb_progress)
+        val statusTitle = findViewById<TextView>(R.id.status_title)
+        val statusSubtitle = findViewById<TextView>(R.id.status_subtitle)
+        val connectedBikeName = findViewById<TextView>(R.id.connected_bike_name)
+        val connectedActionsGroup = findViewById<View>(R.id.connected_actions_group)
+
+        val bikeName = BikeMemory.lastBikeName(this) ?: "Motorcycle"
+
         if (phase == Phase.ERROR && detail.isNotBlank()) {
             try {
                 AnonymousTelemetry.reportError(this, detail)
             } catch (_: Exception) {
             }
         }
-        val color = when (phase) {
-            Phase.STREAMING, Phase.MIRRORING -> ContextCompat.getColor(this, R.color.status_live)
-            Phase.ERROR -> ContextCompat.getColor(this, R.color.status_error)
-            else -> if (phase.busy) ContextCompat.getColor(this, R.color.status_busy)
-                    else ContextCompat.getColor(this, R.color.status_idle)
-        }
-        statusView.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-        statusIcon.setColorFilter(color)
-        statusProgress.visibility = if (phase.busy) View.VISIBLE else View.GONE
 
-        // The bike's link ports are held by the official CFMoto app — offer to close it (see
-        // EasyConnProber's bind-conflict path). Show once per error so we don't nag on every redraw.
-        if (phase == Phase.ERROR && detail.contains("CFMoto app", ignoreCase = true)) {
-            if (!rivalPromptShown) { rivalPromptShown = true; promptCloseRival() }
-        } else {
-            rivalPromptShown = false
+        when (phase) {
+            Phase.IDLE, Phase.STOPPED -> {
+                orbContainer?.setBackgroundResource(R.drawable.bg_orb_idle)
+                orbIcon?.setImageResource(R.drawable.ic_ride)
+                orbIcon?.setColorFilter(ContextCompat.getColor(this, R.color.text_primary))
+                orbIcon?.visibility = View.VISIBLE
+                orbProgress?.visibility = View.GONE
+
+                statusTitle?.text = "CONNECT"
+                statusSubtitle?.text = if (BikeMemory.hasSaved(this)) "$bikeName is ready" else "Turn on your motorcycle to get started."
+                connectedBikeName?.visibility = View.GONE
+
+                connectBtn.visibility = View.VISIBLE
+                connectBtn.text = "CONNECT"
+                connectedActionsGroup?.visibility = View.GONE
+            }
+            Phase.STARTING_AA, Phase.JOINING_WIFI, Phase.AA_VIDEO_LIVE, Phase.PXC_CONNECTING, Phase.RECONNECTING, Phase.WAITING_FOR_BIKE -> {
+                orbContainer?.setBackgroundResource(R.drawable.bg_orb_connecting)
+                orbIcon?.setImageResource(R.drawable.ic_wifi)
+                orbIcon?.setColorFilter(ContextCompat.getColor(this, R.color.brand_orange))
+                orbIcon?.visibility = View.GONE
+                orbProgress?.visibility = View.VISIBLE
+
+                statusTitle?.text = if (phase == Phase.WAITING_FOR_BIKE) "LOOKING FOR YOUR BIKE" else "CONNECTING"
+                statusSubtitle?.text = "Linking with motorcycle dashboard..."
+                connectedBikeName?.visibility = View.GONE
+
+                connectBtn.visibility = View.VISIBLE
+                connectBtn.text = "CANCEL"
+                connectedActionsGroup?.visibility = View.GONE
+            }
+            Phase.STREAMING, Phase.MIRRORING -> {
+                orbContainer?.setBackgroundResource(R.drawable.bg_orb_connected)
+                orbIcon?.setImageResource(R.drawable.ic_ride)
+                orbIcon?.setColorFilter(ContextCompat.getColor(this, R.color.status_live))
+                orbIcon?.visibility = View.VISIBLE
+                orbProgress?.visibility = View.GONE
+
+                statusTitle?.text = "CONNECTED"
+                statusSubtitle?.text = "Ready to ride"
+                connectedBikeName?.text = bikeName
+                connectedBikeName?.visibility = View.VISIBLE
+
+                connectBtn.visibility = View.GONE
+                connectedActionsGroup?.visibility = View.VISIBLE
+            }
+            Phase.ERROR -> {
+                orbContainer?.setBackgroundResource(R.drawable.bg_orb_error)
+                orbIcon?.setImageResource(R.drawable.ic_stop)
+                orbIcon?.setColorFilter(ContextCompat.getColor(this, R.color.status_error))
+                orbIcon?.visibility = View.VISIBLE
+                orbProgress?.visibility = View.GONE
+
+                statusTitle?.text = "COULDN'T CONNECT"
+                statusSubtitle?.text = "Make sure your motorcycle screen is turned on."
+                connectedBikeName?.visibility = View.GONE
+
+                connectBtn.visibility = View.VISIBLE
+                connectBtn.text = "TRY AGAIN"
+                connectedActionsGroup?.visibility = View.GONE
+
+                try { AndroidAutoService.stop(this) } catch (_: Exception) {}
+            }
         }
-        // Only a confirmed kill-switch with a live internet VPN — Map↔AA blips can leave a stale
-        // "kill-switch" detail without an actual VPN; don't nag in that case.
-        if (phase == Phase.ERROR &&
-            detail.contains("kill-switch", ignoreCase = true) &&
-            BikeWifi.isVpnActive(this)
-        ) {
-            if (!vpnPromptShown) { vpnPromptShown = true; promptVpnKillSwitch() }
-        } else {
-            vpnPromptShown = false
-        }
-        connectBtn.text = when {
-            phase.busy -> getString(R.string.main_stop)
-            phase == Phase.STREAMING || phase == Phase.MIRRORING -> getString(R.string.main_stop)
-            BikeMemory.hasSaved(this) ->
-                getString(R.string.main_connect_to, BikeMemory.lastBikeName(this) ?: "")
-            else -> getString(R.string.main_connect)
-        }
-        (connectBtn as? MaterialButton)?.setIconResource(
-            if (phase.busy || phase == Phase.STREAMING || phase == Phase.MIRRORING) {
-                R.drawable.ic_stop
-            } else {
-                R.drawable.ic_power
-            },
-        )
         updateButtonStates(phase)
     }
 
@@ -892,7 +888,8 @@ class MainActivity : AppCompatActivity() {
 
     /** Show which bike (if any) is remembered, under the status header. */
     private fun refreshBikeLabel() {
-        bikeView.text = bikeLabelText()
+        val bikeName = BikeMemory.lastBikeName(this)
+        findViewById<TextView>(R.id.connected_bike_name)?.text = bikeName ?: "Motorcycle"
     }
 
     /**
@@ -967,6 +964,20 @@ class MainActivity : AppCompatActivity() {
         startAaFlow(saved)
     }
 
+    private fun showNavigationChooser() {
+        val options = arrayOf("Google Maps", "Waze")
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Navigation")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> NavigationLauncher.openGoogleMaps(this)
+                    1 -> NavigationLauncher.openWaze(this)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun bikeLabelText(): String {
         val name = BikeMemory.lastBikeName(this)
         return if (name != null) getString(R.string.main_paired, name)
@@ -987,7 +998,19 @@ class MainActivity : AppCompatActivity() {
         if (!WifiGate.ensureEnabledOrPrompt(this)) return
         ConnectionState.set(Phase.JOINING_WIFI)
         val transport = AppSettings.transport(this)
-        // Phone-hosts-hotspot (Zontes action=128 / no SoftAP pwd): dash joins the phone.
+
+        // If the QR carries a MAC address (e.g. Carbit Ride EC_* or P2P), attempt Wi-Fi Direct by MAC first!
+        val hasMac = !qr.mac.isNullOrBlank()
+        val isCarbitEcDevice = qr.ssid.startsWith("EC_", ignoreCase = true) || qr.name?.startsWith("EC_", ignoreCase = true) == true
+        val preferP2pByMac = hasMac && (qr.supportsP2p || isCarbitEcDevice || qr.pwd.isEmpty())
+
+        if (preferP2pByMac) {
+            log("→ Connecting via Wi‑Fi Direct (P2P) by MAC ${qr.mac} to '${qr.name ?: qr.ssid}'")
+            joinWifiP2p(qr, gateOnAaSteady)
+            return
+        }
+
+        // Phone-hosts-hotspot fallback:
         if (qr.supportsPhoneHotspot && qr.pwd.isEmpty()) {
             joinPhoneHotspot(qr, gateOnAaSteady)
             return
@@ -1291,7 +1314,7 @@ class MainActivity : AppCompatActivity() {
      *  3) Nothing projected → open Map hub search on the phone
      */
     private fun navigateToTyped() {
-        val field = findViewById<android.widget.EditText>(R.id.et_destination)
+        val field = findViewById<android.widget.EditText>(R.id.et_destination) ?: return
         val dest = field.text?.toString()?.trim().orEmpty()
         if (dest.isEmpty()) {
             Toast.makeText(this, R.string.main_type_place, Toast.LENGTH_SHORT).show()

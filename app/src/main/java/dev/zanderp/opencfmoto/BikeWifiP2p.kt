@@ -1,4 +1,4 @@
-﻿package dev.zanderp.opencfmoto
+package dev.zanderp.opencfmoto
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Adapted from eugen0309/open-cfmoto.
@@ -87,6 +87,7 @@ object BikeWifiP2p {
         log("$TAG   qr ssid='${qr.ssid}' mac=${qr.mac} action=${qr.action} (p2p=${qr.supportsP2p} ap=${qr.supportsAp})")
         log("$TAG   expecting bike GO at 192.168.49.1; phone will be a P2P client")
 
+        ConnectionTrace.transition(ConnectionTrace.Step.P2P_DISCOVERY_STARTED, "mac=${qr.mac}")
         registerReceiver(ctx, mgr, chan, qr, onConnected, onFailed, log)
 
         // Peer discovery is required on many phones before connect(), and surfaces the bike so we
@@ -162,10 +163,16 @@ object BikeWifiP2p {
         log: (String) -> Unit,
     ) {
         if (!active || connected) return
-        val mac = normalizeMac(qr.mac)
-        if (mac == null) {
+        val rawMac = normalizeMac(qr.mac)
+        if (rawMac == null) {
             log("$TAG MAC-join skipped — QR has no usable mac=")
             return
+        }
+        // Carbit EasyConnect QR encodes Bluetooth MAC (DD:..) while Wi-Fi Direct uses DC:..
+        val mac = if (rawMac.startsWith("dd:", ignoreCase = true)) {
+            "dc:" + rawMac.substring(3)
+        } else {
+            rawMac
         }
         if (connectIssued) return
         // Some stacks reject connect() while discovery is still running (Pixel ERROR).
@@ -261,6 +268,10 @@ object BikeWifiP2p {
                             log(
                                 "$TAG found matching peer '${peer.deviceName}' (${peer.deviceAddress}) — connecting",
                             )
+                            ConnectionTrace.transition(
+                                ConnectionTrace.Step.P2P_DEVICE_FOUND,
+                                "${peer.deviceName} (${peer.deviceAddress})",
+                            )
                             // Prefer the shared MAC-join path (stops discovery first).
                             attemptMacJoin(
                                 mgr,
@@ -274,7 +285,13 @@ object BikeWifiP2p {
                         mgr.requestConnectionInfo(chan) { info ->
                             log("$TAG conn: groupFormed=${info.groupFormed} isGO=${info.isGroupOwner} " +
                                 "goAddr=${info.groupOwnerAddress?.hostAddress}")
-                            if (info.groupFormed && !connected) onGroupFormed(mgr, chan, info, onConnected, onFailed, log)
+                            if (info.groupFormed && !connected) {
+                                ConnectionTrace.transition(
+                                    ConnectionTrace.Step.P2P_CONNECTED,
+                                    "GO=${info.groupOwnerAddress?.hostAddress}",
+                                )
+                                onGroupFormed(mgr, chan, info, onConnected, onFailed, log)
+                            }
                         }
                     }
                 }
@@ -294,8 +311,9 @@ object BikeWifiP2p {
     }
 
     /**
-     * Exact match, or Wi‑Fi/BT locally-administered offset (±1 on the last octet) seen on some
-     * Carbit units where the QR `mac=` and the P2P device address differ by one.
+     * Exact match, or Wi‑Fi/BT locally-administered offset (DD vs DC prefix, or ±1 on the last octet)
+     * seen on Carbit / EasyConnect units where the QR carries the Bluetooth MAC (DD:..) while the
+     * Wi-Fi P2P device address starts with DC:...
      */
     private fun macMatches(want: String, peer: String): Boolean {
         if (want.equals(peer, ignoreCase = true)) return true
@@ -303,10 +321,19 @@ object BikeWifiP2p {
         val p = peer.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }.lowercase()
         if (w.length != 12 || p.length != 12) return false
         if (w == p) return true
-        if (w.take(10) != p.take(10)) return false
-        val wd = w.takeLast(2).toIntOrNull(16) ?: return false
-        val pd = p.takeLast(2).toIntOrNull(16) ?: return false
-        return abs(wd - pd) == 1
+
+        // Match if last 10 chars match (e.g. DD:0D:30:5A:1E:71 vs DC:0D:30:5A:1E:71)
+        if (w.takeLast(10) == p.takeLast(10)) return true
+
+        // Match if last 8 chars match (e.g. 30:5A:1E:71)
+        if (w.takeLast(8) == p.takeLast(8)) return true
+
+        if (w.take(10) == p.take(10)) {
+            val wd = w.takeLast(2).toIntOrNull(16) ?: return false
+            val pd = p.takeLast(2).toIntOrNull(16) ?: return false
+            return abs(wd - pd) <= 2
+        }
+        return false
     }
 
     @SuppressLint("MissingPermission")
@@ -341,7 +368,15 @@ object BikeWifiP2p {
                 if (!active || connected) return@thread
                 connected = true
                 cancelTimeout()
-                log("$TAG *** connected: phone=${bindIp.hostAddress} bike(GO)=${gateway.hostAddress} â€” starting PXC ***")
+                log("$TAG *** connected: phone=${bindIp.hostAddress} bike(GO)=${gateway.hostAddress} — starting PXC ***")
+                ConnectionTrace.transition(
+                    ConnectionTrace.Step.NETWORK_AVAILABLE,
+                    "Phone=${bindIp.hostAddress}, Dash=${gateway.hostAddress}",
+                )
+                ConnectionTrace.transition(
+                    ConnectionTrace.Step.DASH_IP_DISCOVERED,
+                    gateway.hostAddress,
+                )
                 onConnected(bindIp, gateway)
             }
         }

@@ -1,98 +1,103 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/garage_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg"
+    android:background="@color/m3_sys_dark_surface"
     android:orientation="vertical">
 
+    <!-- Top Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="20dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="6dp">
+        android:paddingTop="20dp"
+        android:paddingBottom="12dp">
 
-        <ImageView
-            android:layout_width="26dp"
-            android:layout_height="26dp"
-            android:contentDescription="@string/garage_garage"
-            android:src="@drawable/ic_devices"
-            android:tint="@color/brand_orange" />
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_icon_container">
+
+            <ImageView
+                android:id="@+id/garage_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Back"
+                android:padding="8dp"
+                android:src="@drawable/ic_man_left"
+                app:tint="@color/m3_sys_dark_on_surface" />
+        </FrameLayout>
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
             android:layout_weight="1"
-            android:layout_marginStart="10dp"
-            android:text="@string/garage_garage"
-            android:textColor="@color/text_primary"
-            android:textSize="20sp"
+            android:letterSpacing="0.04"
+            android:text="MY MOTORCYCLES"
+            android:textColor="@color/m3_sys_dark_on_surface"
+            android:textSize="22sp"
             android:textStyle="bold" />
     </LinearLayout>
 
     <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="20dp"
-        android:paddingBottom="4dp"
-        android:text="@string/garage_each_bike_keeps_its_own_name_photo_screen_fit_re"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp"
-        android:lineSpacingExtra="3dp" />
-
-    <TextView
         android:id="@+id/garage_empty"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="30dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:gravity="center"
-        android:paddingHorizontal="32dp"
-        android:text="@string/garage_no_bikes_yet_scan_your_dash_qr_or_enter_wi_fi_na"
-        android:textColor="@color/text_secondary"
-        android:textSize="15sp"
         android:lineSpacingExtra="4dp"
+        android:paddingHorizontal="36dp"
+        android:text="No motorcycles paired yet.\nScan your dashboard QR to get started."
+        android:textColor="@color/m3_sys_dark_on_surface_variant"
+        android:textSize="16sp"
         android:visibility="gone" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:paddingHorizontal="16dp">
+        android:paddingHorizontal="20dp">
 
         <LinearLayout
             android:id="@+id/garage_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="16dp" />
+            android:paddingBottom="20dp" />
     </ScrollView>
 
+    <!-- Bottom Actions -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="16dp"
-        android:paddingTop="4dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="24dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/garage_scan"
+            style="@style/Widget.OpenCfMoto.Button.Connect"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/garage_scan_new_bike"
+            android:text="+ ADD MOTORCYCLE (SCAN)"
             app:icon="@drawable/ic_qr" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/garage_manual"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            style="@style/Widget.OpenCfMoto.Button.Outlined"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/garage_enter_wi_fi_manually"
-            app:icon="@drawable/ic_wifi" />
+            android:layout_marginTop="10dp"
+            android:text="Enter Wi-Fi Manually"
+            app:icon="@drawable/ic_wifi"
+            app:iconTint="@color/m3_sys_dark_on_surface" />
     </LinearLayout>
 </LinearLayout>

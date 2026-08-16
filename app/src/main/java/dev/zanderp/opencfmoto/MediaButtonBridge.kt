@@ -722,6 +722,12 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         if (!ButtonMode.isControlAa(context)) return   // media mode: leave the buttons to music
         val action = ButtonMap.get(context, gesture)
         log("[BTN] ${gesture.label} → ${action.label}")
+        DiagnosticsStore.updateInput(
+            handlebarState = "ACTIVE",
+            lastEventType = "HANDLEBAR",
+            lastEventDetail = "${gesture.label} → ${action.label}",
+            incrementCount = true
+        )
         perform(action)
     }
 

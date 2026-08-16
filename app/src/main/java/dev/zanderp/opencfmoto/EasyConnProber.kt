@@ -163,6 +163,16 @@ class EasyConnProber(
         this.bikeIp = bikeIp
         log("our IP=${myIp.hostAddress}  bike IP=${bikeIp.hostAddress}")
 
+        val transportName = if (gatewayOverride != null || bindIpOverride != null) "Wi-Fi Direct (P2P)" else "SoftAP"
+        DiagnosticsStore.updateNetwork(
+            transport = transportName,
+            wifiState = "CONNECTED",
+            phoneIp = myIp.hostAddress,
+            dashIp = bikeIp.hostAddress,
+            gateway = bikeIp.hostAddress,
+            networkBinding = if (network != null) "Bound (Network #$network)" else "Interface Bound",
+        )
+
         running = true
         acquireMulticastLock()
 
@@ -289,6 +299,9 @@ class EasyConnProber(
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (video === live && live.isAlive) live.onBikeDataStart()
         }, 200)
+        ConnectionTrace.transition(ConnectionTrace.Step.MEDIA_CHANNEL_OPEN, "${bikeIp?.hostAddress ?: ""}:10920")
+        ConnectionTrace.transition(ConnectionTrace.Step.PROJECTION_READY)
+        ConnectionTrace.transition(ConnectionTrace.Step.CONNECTED, "Dashboard connected")
         ConnectionState.set(Phase.STREAMING)
         return true
     }
@@ -845,6 +858,13 @@ class EasyConnProber(
             3 -> 2   // MOVE
             else -> { log("[$tag] touch: unknown action=$rawAction x=$x y=$y"); return }
         }
+
+        DiagnosticsStore.updateInput(
+            touchState = "ACTIVE",
+            lastEventType = "TOUCH",
+            lastEventDetail = "action=${if (action == 0) "DOWN" else if (action == 1) "UP" else "MOVE"} (x=$x, y=$y)",
+            incrementCount = true,
+        )
 
         synchronized(pointers) {
             val now = android.os.SystemClock.elapsedRealtime()

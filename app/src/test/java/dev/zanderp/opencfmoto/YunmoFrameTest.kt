@@ -108,9 +108,9 @@ class YunmoFrameTest {
         assertEquals(2048, dim.mapsW)
         assertEquals(928, dim.mapsH)
         val (ew, eh) = YunmoFrame.encodeSizeFrom(dim, 800, 480)
-        // Ride MO maps size (reported×2); raw 1024×464 ACKs but paints black (vc43).
-        assertEquals(2048, ew)
-        assertEquals(928, eh)
+        // Ride MO NaviVirtualDisplay is reported size 1024x464 @187 dpi
+        assertEquals(1024, ew)
+        assertEquals(464, eh)
     }
 
     @Test

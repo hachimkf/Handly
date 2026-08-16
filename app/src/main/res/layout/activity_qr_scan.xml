@@ -1,87 +1,188 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/qr_scan_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/m3_sys_dark_surface">
 
+    <!-- Camera Preview -->
     <androidx.camera.view.PreviewView
         android:id="@+id/preview_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Top Navigation Chrome -->
     <LinearLayout
+        android:id="@+id/qr_top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:background="#99000000"
-        android:orientation="vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="14dp">
+        android:layout_alignParentTop="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="12dp">
+
+        <FrameLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_icon_container">
+
+            <ImageView
+                android:id="@+id/btn_qr_back"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Back"
+                android:padding="10dp"
+                android:src="@drawable/ic_man_left"
+                app:tint="@color/m3_sys_dark_on_surface" />
+        </FrameLayout>
 
         <TextView
-            android:id="@+id/hint"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="@string/qr_point_the_camera_at_the_bike_s_motoplay_qr_if_it"
-            android:textAlignment="center"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:lineSpacingExtra="2dp" />
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:letterSpacing="0.06"
+            android:text="SCAN DASHBOARD QR"
+            android:textColor="@color/m3_sys_dark_on_surface"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/btn_manual_wifi"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/garage_enter_wi_fi_manually"
-            android:textColor="#FFB74D" />
+        <FrameLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_icon_container">
 
-        <Button
-            android:id="@+id/btn_qr_photo"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/qr_from_photo"
-            android:textColor="#FFB74D" />
+            <ImageView
+                android:id="@+id/btn_qr_torch"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Flashlight"
+                android:padding="11dp"
+                android:src="@drawable/ic_torch"
+                app:tint="@color/m3_sys_dark_on_surface" />
+        </FrameLayout>
     </LinearLayout>
 
+    <!-- Center Viewfinder Frame Reticle -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="120dp"
-        android:background="#88000000"
-        android:orientation="horizontal"
-        android:padding="6dp">
+        android:layout_above="@id/bottom_sheet_container"
+        android:layout_below="@id/qr_top_bar"
+        android:layout_centerHorizontal="true"
+        android:gravity="center"
+        android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btn_zoom_1x"
-            android:layout_width="56dp"
-            android:layout_height="44dp"
-            android:layout_marginEnd="4dp"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="@string/qr_1x"
-            android:textColor="#FFFFFF" />
+        <FrameLayout
+            android:layout_width="260dp"
+            android:layout_height="260dp"
+            android:background="@drawable/bg_viewfinder_frame" />
 
-        <Button
-            android:id="@+id/btn_zoom_2x"
-            android:layout_width="56dp"
-            android:layout_height="44dp"
-            android:layout_marginEnd="4dp"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="@string/qr_2x"
-            android:textColor="#FFFFFF" />
-
-        <Button
-            android:id="@+id/btn_zoom_3x"
-            android:layout_width="56dp"
-            android:layout_height="44dp"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="@string/qr_3x"
-            android:textColor="#FFFFFF" />
+        <TextView
+            android:id="@+id/hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_pill_badge"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp"
+            android:text="Align dashboard QR code inside the frame"
+            android:textColor="@color/m3_sys_dark_on_surface"
+            android:textSize="13sp" />
     </LinearLayout>
-</FrameLayout>
+
+    <!-- Bottom M3 Expressive Control Sheet -->
+    <LinearLayout
+        android:id="@+id/bottom_sheet_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="@color/m3_sys_dark_surface_container"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="28dp">
+
+        <!-- Zoom Pill Toggle -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_pill_badge"
+            android:orientation="horizontal"
+            android:padding="4dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_zoom_1x"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="56dp"
+                android:layout_height="36dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="1x"
+                android:textColor="@color/m3_sys_dark_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_zoom_2x"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="56dp"
+                android:layout_height="36dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="2x"
+                android:textColor="@color/m3_sys_dark_on_surface_variant"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_zoom_3x"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="56dp"
+                android:layout_height="36dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="3x"
+                android:textColor="@color/m3_sys_dark_on_surface_variant"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Primary Action: Manual Wi-Fi Entry -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_manual_wifi"
+            style="@style/Widget.OpenCfMoto.Button.Tonal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ENTER WI-FI MANUALLY"
+            app:icon="@drawable/ic_wifi"
+            app:iconTint="@color/m3_sys_dark_primary" />
+
+        <!-- Secondary Action: Import QR Photo -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_qr_photo"
+            style="@style/Widget.OpenCfMoto.Button.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Import QR from Photo"
+            app:icon="@drawable/ic_ride"
+            app:iconTint="@color/m3_sys_dark_on_surface" />
+    </LinearLayout>
+
+</RelativeLayout>

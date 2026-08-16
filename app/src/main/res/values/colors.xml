@@ -1,26 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <resources>
+    <!-- Core Brand & Expressive Colors -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Brand: CFMoto-inspired sport orange on a dark "cockpit" surface. -->
-    <color name="brand_orange">#FF6A2C</color>
-    <color name="brand_orange_dark">#E85A1E</color>
-    <color name="on_brand">#FFFFFF</color>
+    <!-- Material 3 Expressive Primary (Electric Motorcycle Amber / Orange) -->
+    <color name="m3_sys_dark_primary">#FF772A</color>
+    <color name="m3_sys_dark_on_primary">#4F2500</color>
+    <color name="m3_sys_dark_primary_container">#381E00</color>
+    <color name="m3_sys_dark_on_primary_container">#FFDCC2</color>
 
-    <!-- Dark surfaces -->
-    <color name="bg">#0E1116</color>
-    <color name="surface">#171B22</color>
-    <color name="surface_high">#1F242E</color>
-    <color name="outline">#2C333F</color>
+    <!-- Material 3 Expressive Secondary -->
+    <color name="m3_sys_dark_secondary">#E7BEAC</color>
+    <color name="m3_sys_dark_on_secondary">#442A1D</color>
+    <color name="m3_sys_dark_secondary_container">#2B231F</color>
+    <color name="m3_sys_dark_on_secondary_container">#FFDCC2</color>
 
-    <!-- Text -->
-    <color name="text_primary">#F2F5FA</color>
-    <color name="text_secondary">#9AA4B2</color>
+    <!-- Material 3 Expressive Tertiary -->
+    <color name="m3_sys_dark_tertiary">#D2C896</color>
+    <color name="m3_sys_dark_on_tertiary">#37300C</color>
+    <color name="m3_sys_dark_tertiary_container">#4F4620</color>
+    <color name="m3_sys_dark_on_tertiary_container">#EFE4B0</color>
 
-    <!-- Status semantics -->
-    <color name="status_live">#34C759</color>
+    <!-- Material 3 Expressive Surface Hierarchy (Dark Mode) -->
+    <color name="m3_sys_dark_surface">#111318</color>
+    <color name="m3_sys_dark_surface_dim">#0C0E12</color>
+    <color name="m3_sys_dark_surface_bright">#37393E</color>
+    <color name="m3_sys_dark_surface_container_lowest">#0B0D11</color>
+    <color name="m3_sys_dark_surface_container_low">#191C20</color>
+    <color name="m3_sys_dark_surface_container">#1E2025</color>
+    <color name="m3_sys_dark_surface_container_high">#282A2F</color>
+    <color name="m3_sys_dark_surface_container_highest">#33353A</color>
+
+    <!-- Material 3 Expressive Content Text & Outline -->
+    <color name="m3_sys_dark_on_surface">#E2E2E9</color>
+    <color name="m3_sys_dark_on_surface_variant">#A2A7B5</color>
+    <color name="m3_sys_dark_outline">#8E9099</color>
+    <color name="m3_sys_dark_outline_variant">#3C404B</color>
+
+    <!-- Material 3 Expressive Status & Semantics -->
+    <color name="m3_sys_dark_status_live">#7BD98F</color>
+    <color name="m3_sys_dark_on_status_live">#003915</color>
+    <color name="m3_sys_dark_status_live_container">#005322</color>
+    <color name="m3_sys_dark_status_error">#FFB4AB</color>
+    <color name="m3_sys_dark_on_status_error">#690005</color>
+    <color name="m3_sys_dark_status_error_container">#93000A</color>
+
+    <!-- Legacy / Compatibility Aliases mapped to M3 Expressive Tokens -->
+    <color name="brand_orange">@color/m3_sys_dark_primary</color>
+    <color name="brand_orange_dark">@color/m3_sys_dark_primary_container</color>
+    <color name="on_brand">@color/m3_sys_dark_on_primary</color>
+    <color name="bg">@color/m3_sys_dark_surface</color>
+    <color name="surface">@color/m3_sys_dark_surface_container</color>
+    <color name="surface_high">@color/m3_sys_dark_surface_container_high</color>
+    <color name="outline">@color/m3_sys_dark_outline_variant</color>
+    <color name="text_primary">@color/m3_sys_dark_on_surface</color>
+    <color name="text_secondary">@color/m3_sys_dark_on_surface_variant</color>
+    <color name="status_live">@color/m3_sys_dark_status_live</color>
     <color name="status_busy">#FFB020</color>
-    <color name="status_error">#FF5A52</color>
-    <color name="status_idle">#8A93A3</color>
+    <color name="status_error">@color/m3_sys_dark_status_error</color>
+    <color name="status_idle">@color/m3_sys_dark_on_surface_variant</color>
 </resources>

@@ -56,7 +56,7 @@ class QrDataTest {
         assertFalse(qr.supportsAp)
         assertEquals("dd:0d:30:24:87:6d", qr.mac)
         assertEquals("21322", qr.modelId)
-        assertTrue(qr.ssid.startsWith("PHONE-HOTSPOT"))
+        assertTrue(qr.ssid.startsWith("EC_") || qr.ssid.startsWith("PHONE-HOTSPOT"))
         assertTrue(qr.pwd.isEmpty())
     }
 

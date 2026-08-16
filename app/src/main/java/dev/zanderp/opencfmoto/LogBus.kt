@@ -33,7 +33,9 @@ object LogBus {
         if (sb.length > 512 * 1024) sb.delete(0, sb.length - 256 * 1024)
         // Mirror to logcat so the full diagnostic stream is capturable over adb (`adb logcat -s
         // OpenCfMoto:*`) during on-hardware debugging, not just in the in-app log view.
-        Log.i(TAG, safe)
+        try {
+            Log.i(TAG, safe)
+        } catch (_: Throwable) {}
         try { listener?.invoke(line) } catch (_: Exception) {}
     }
 

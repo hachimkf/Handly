@@ -49,24 +49,39 @@ class PxcHandshake(
         when (frame.cmd) {
             PxcFrame.CMD_CHANNEL_CAR_CTRL -> {
                 log("[$tag] bike selected CAR_CTRL (0x10000) → ack 0x10001")
+                DiagnosticsStore.updatePxc(sessionState = "CAR_CTRL ACTIVE")
                 PxcFrame(PxcFrame.CMD_CHANNEL_CAR_CTRL + 1, ByteArray(0)).write(out)
                 onPxcChannelSelected?.invoke(socket, "CAR_CTRL")
             }
             PxcFrame.CMD_CHANNEL_CAR_DATA -> {
                 log("[$tag] bike selected CAR_DATA (0x20000) → ack 0x20001")
+                DiagnosticsStore.updatePxc(sessionState = "CAR_DATA ACTIVE")
                 PxcFrame(PxcFrame.CMD_CHANNEL_CAR_DATA + 1, ByteArray(0)).write(out)
                 onPxcChannelSelected?.invoke(socket, "CAR_DATA")
             }
-            PxcFrame.CMD_CLIENT_INFO -> onClientInfo(tag, frame, out)
+            PxcFrame.CMD_CLIENT_INFO -> {
+                DiagnosticsStore.updatePxc(handshakeState = "CLIENT_INFO RECEIVED")
+                ConnectionTrace.transition(ConnectionTrace.Step.CLIENT_INFO_SENT, "version=2, supportFunction=128")
+                onClientInfo(tag, frame, out)
+            }
             PxcFrame.CMD_QUERY_SPEED -> {
                 log("[$tag] QUERY_SPEED ${frame.payload.asText()} → reply 0x10691")
+                ConnectionTrace.transition(ConnectionTrace.Step.NOTIFY_RECEIVED, "QUERY_SPEED (0x10690)")
                 PxcFrame(PxcFrame.CMD_QUERY_SPEED_RLY, ByteArray(0)).write(out)
+                ConnectionTrace.transition(ConnectionTrace.Step.NOTIFY_ACK_SENT, "QUERY_SPEED_RLY (0x10691)")
             }
-            PxcFrame.CMD_CHECK_SN -> onCheckSn(tag, frame, out)
+            PxcFrame.CMD_CHECK_SN -> {
+                DiagnosticsStore.updatePxc(handshakeState = "COMPLETE")
+                onCheckSn(tag, frame, out)
+            }
             PxcFrame.CMD_HEARTBEAT -> {
+                DiagnosticsStore.updatePxc(heartbeatState = "ACTIVE (RX)")
+                ConnectionTrace.transition(ConnectionTrace.Step.HEARTBEAT_STARTED, "0x70000000 (RX)")
                 PxcFrame(PxcFrame.CMD_HEARTBEAT_ACK, ByteArray(0)).write(out)
             }
-            PxcFrame.CMD_HEARTBEAT_ACK,
+            PxcFrame.CMD_HEARTBEAT_ACK -> {
+                DiagnosticsStore.updatePxc(heartbeatState = "ACTIVE (ACK)")
+            }
             PxcFrame.CMD_CHECK_SN_RESULT + 1 -> {
                 // acks from the bike — nothing to do
             }
@@ -75,6 +90,10 @@ class PxcHandshake(
             PxcFrame.CMD_HU_TIME_SYNC -> onHuTimeSync(tag, frame, out)
             PxcFrame.CMD_HU_QUERY_TIME -> onHuQueryTime(tag, frame, out)
             else -> {
+                ConnectionTrace.transition(
+                    ConnectionTrace.Step.NOTIFY_RECEIVED,
+                    "0x${frame.cmd.toUInt().toString(16)} (${PxcFrame.nameOf(frame.cmd)})",
+                )
                 if (!profile.handleUnknownControl(tag, frame, out, log)) {
                     log("[$tag] cmd=0x${frame.cmd.toUInt().toString(16)} (${PxcFrame.nameOf(frame.cmd)}) " +
                         "len=${frame.payload.size} ${frame.payload.asText()}")
@@ -87,6 +106,7 @@ class PxcHandshake(
         val ack = HuQueryTime.ack()
         PxcFrame(PxcFrame.CMD_HU_QUERY_TIME_ACK, ack.payload).write(out)
         log("[$tag] HU_QUERY_TIME (0x10450) len=${frame.payload.size} → 0x10451 dateTime=${ack.dateTime}")
+        ConnectionTrace.transition(ConnectionTrace.Step.NOTIFY_ACK_SENT, "0x10451 dateTime=${ack.dateTime}")
         pushPhoneHuTime(tag, out, "after QUERY_TIME")
     }
 
@@ -96,6 +116,7 @@ class PxcHandshake(
         val ack = HuTimeSync.ack(ByteArray(0))
         PxcFrame(PxcFrame.CMD_HU_TIME_SYNC_ACK, ack.payload).write(out)
         log("[$tag] HU_TIME_SYNC push ($reason) → 0x10601 mode=${ack.mode} time=${ack.stamp}")
+        ConnectionTrace.transition(ConnectionTrace.Step.NOTIFY_ACK_SENT, "0x10601 mode=${ack.mode} time=${ack.stamp}")
     }
 
     private fun onHuTimeSync(tag: String, frame: PxcFrame, out: java.io.OutputStream) {
@@ -107,6 +128,7 @@ class PxcHandshake(
             lastHuTimeSyncLogAt = now
             log("[$tag] HU_TIME_SYNC #$n len=${frame.payload.size} → ack 0x10601 mode=${ack.mode} time=${ack.stamp}")
         }
+        ConnectionTrace.transition(ConnectionTrace.Step.NOTIFY_ACK_SENT, "0x10601 (HU_TIME_SYNC_ACK)")
     }
 
     private fun onClientInfo(tag: String, frame: PxcFrame, out: java.io.OutputStream) {
@@ -117,7 +139,32 @@ class PxcHandshake(
         }
         lastClientInfo = json
         carHuid = json.optString("HUID").ifEmpty { json.optString("huid") }.ifEmpty { null }
-        log("[$tag] carHuid=$carHuid HUName=${json.optString("HUName")} channel=${json.optString("channel")}")
+        val huName = json.optString("HUName")
+        val channel = json.optString("channel")
+        val sware = json.optString("Sware").ifEmpty { json.optString("sware") }
+        val hware = json.optString("Hware").ifEmpty { json.optString("hware") }
+        val sdkVersion = json.optString("sdkVersion")
+        val pkg = json.optString("package_name").ifEmpty { json.optString("package") }
+        val versionName = json.optString("version_name")
+
+        ConnectionTrace.transition(
+            ConnectionTrace.Step.CLIENT_INFO_RESPONSE_RECEIVED,
+            "HUID=$carHuid, Sware=$sware, Hware=$hware, pkg=$pkg",
+        )
+
+        ConnectionState.updateDashMetadata(
+            ConnectionState.DashMetadata(
+                huid = carHuid ?: "",
+                huName = huName,
+                channel = channel,
+                sware = sware,
+                hware = hware,
+                sdkVersion = sdkVersion,
+                packageName = pkg,
+                versionName = versionName,
+            )
+        )
+        log("[$tag] Dash Metadata: carHuid=$carHuid HUName=$huName channel=$channel Sware=$sware Hware=$hware sdk=$sdkVersion pkg=$pkg version=$versionName")
 
         profile = BikeProfiles.select(json, log)
         val early = BikeProfileHolder.active

@@ -561,6 +561,15 @@ class VideoPipeline(
                             frameQueue.offerLast(out)
                             droppedFrames++
                         }
+                        val w = if (encoderW > 0) encoderW else width
+                        val h = if (encoderH > 0) encoderH else height
+                        DiagnosticsStore.updateMedia(
+                            state = "STREAMING",
+                            resolution = "${w}x$h",
+                            bitrateBps = if (currentBitrate > 0) currentBitrate.toLong() else baseBitrate.toLong(),
+                            droppedFrames = droppedFrames,
+                            port = 10920,
+                        )
                     }
                 }
             }

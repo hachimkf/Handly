@@ -31,6 +31,7 @@ data class PxcFrame(val cmd: Int, val payload: ByteArray) {
             if (payload.isNotEmpty()) out.write(payload)
             out.flush()
         }
+        DiagnosticsStore.updatePxc(addTxPackets = 1, addTxBytes = totalLen.toLong())
     }
 
     companion object {
@@ -160,6 +161,7 @@ data class PxcFrame(val cmd: Int, val payload: ByteArray) {
             if (payloadLen > 0 && !readFully(input, payload, payloadLen)) {
                 throw IllegalStateException("short payload, expected=$payloadLen")
             }
+            DiagnosticsStore.updatePxc(addRxPackets = 1, addRxBytes = totalLen.toLong())
             return PxcFrame(cmd, payload)
         }
     }

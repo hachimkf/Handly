@@ -37,6 +37,15 @@ class BikeProfileSelectTest {
     }
 
     @Test
+    fun genericCarbitProfileMatchesAndResolves() {
+        assertTrue(GenericCarbitProfile.supportsScreenTouch)
+        assertEquals(128, GenericCarbitProfile.advertisedSupportFunction)
+        assertTrue(GenericCarbitProfile.matchesModelId("carbit_ride"))
+        assertTrue(GenericCarbitProfile.matchesModelId("easyride_v1"))
+        assertEquals(GenericCarbitProfile, ProfileOverride.GENERIC_CARBIT.resolve())
+    }
+
+    @Test
     fun buttonDefaultsMatchHandlebarLayout() {
         // Universal all-bike model: single = knob, ×2 = D-pad ←/→, Select = OK / ×2 Back.
         assertEquals(ButtonAction.KNOB_BACK, ButtonGesture.NAV_BACK.default)

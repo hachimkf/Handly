@@ -1,97 +1,152 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- A dark "cockpit" theme with a CFMoto-orange accent. Dark is intentional: this runs on a
-         bike in daylight/handlebar context and mirrors a commercial head-unit look. -->
+    <!-- Google Material 3 Expressive Dark Theme -->
     <style name="Base.Theme.OpenCfMoto" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="colorPrimary">@color/brand_orange</item>
-        <item name="colorOnPrimary">@color/on_brand</item>
-        <item name="colorPrimaryContainer">@color/brand_orange_dark</item>
-        <item name="colorOnPrimaryContainer">@color/on_brand</item>
+        <!-- Brand / Accent Colors -->
+        <item name="colorPrimary">@color/m3_sys_dark_primary</item>
+        <item name="colorOnPrimary">@color/m3_sys_dark_on_primary</item>
+        <item name="colorPrimaryContainer">@color/m3_sys_dark_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/m3_sys_dark_on_primary_container</item>
 
-        <item name="android:colorBackground">@color/bg</item>
-        <item name="colorSurface">@color/surface</item>
-        <item name="colorSurfaceVariant">@color/surface_high</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
-        <item name="colorOutline">@color/outline</item>
+        <item name="colorSecondary">@color/m3_sys_dark_secondary</item>
+        <item name="colorOnSecondary">@color/m3_sys_dark_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/m3_sys_dark_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/m3_sys_dark_on_secondary_container</item>
 
-        <item name="android:statusBarColor">@color/bg</item>
-        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="colorTertiary">@color/m3_sys_dark_tertiary</item>
+        <item name="colorOnTertiary">@color/m3_sys_dark_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/m3_sys_dark_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/m3_sys_dark_on_tertiary_container</item>
+
+        <!-- Expressive Surface Hierarchy -->
+        <item name="android:colorBackground">@color/m3_sys_dark_surface</item>
+        <item name="colorSurface">@color/m3_sys_dark_surface</item>
+        <item name="colorSurfaceDim">@color/m3_sys_dark_surface_dim</item>
+        <item name="colorSurfaceBright">@color/m3_sys_dark_surface_bright</item>
+        <item name="colorSurfaceContainerLowest">@color/m3_sys_dark_surface_container_lowest</item>
+        <item name="colorSurfaceContainerLow">@color/m3_sys_dark_surface_container_low</item>
+        <item name="colorSurfaceContainer">@color/m3_sys_dark_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/m3_sys_dark_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/m3_sys_dark_surface_container_highest</item>
+
+        <!-- Content & Borders -->
+        <item name="colorOnSurface">@color/m3_sys_dark_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/m3_sys_dark_on_surface_variant</item>
+        <item name="colorOutline">@color/m3_sys_dark_outline</item>
+        <item name="colorOutlineVariant">@color/m3_sys_dark_outline_variant</item>
+
+        <!-- Error & Semantics -->
+        <item name="colorError">@color/m3_sys_dark_status_error</item>
+        <item name="colorOnError">@color/m3_sys_dark_on_status_error</item>
+        <item name="colorErrorContainer">@color/m3_sys_dark_status_error_container</item>
+
+        <!-- Status Bars -->
+        <item name="android:statusBarColor">@color/m3_sys_dark_surface</item>
+        <item name="android:navigationBarColor">@color/m3_sys_dark_surface</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
     </style>
 
     <style name="Theme.OpenCfMoto" parent="Base.Theme.OpenCfMoto" />
 
-    <!-- Primary CTA: tall, rounded, confident. Height grows with font scale. -->
+    <!-- Material 3 Expressive Hero Pill Button -->
     <style name="Widget.OpenCfMoto.Button.Connect" parent="Widget.Material3.Button">
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:minHeight">@dimen/btn_connect_min_height</item>
-        <item name="android:textSize">@dimen/btn_connect_text</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:textSize">16sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:letterSpacing">0.01</item>
+        <item name="android:letterSpacing">0.03</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
-        <item name="cornerRadius">18dp</item>
+        <item name="cornerRadius">28dp</item>
+        <item name="backgroundTint">@color/m3_sys_dark_primary</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_primary</item>
         <item name="iconGravity">textStart</item>
-        <item name="iconPadding">@dimen/btn_icon_padding</item>
+        <item name="iconPadding">10dp</item>
+        <item name="iconSize">22dp</item>
     </style>
 
-    <!-- Secondary actions: tonal. Icon beside text (not above) so labels stay horizontal. -->
+    <!-- Material 3 Expressive Tonal Button -->
     <style name="Widget.OpenCfMoto.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
-        <item name="cornerRadius">14dp</item>
+        <item name="cornerRadius">20dp</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:minHeight">@dimen/btn_tonal_min_height</item>
-        <item name="android:textSize">@dimen/btn_tonal_text</item>
+        <item name="android:minHeight">50dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
+        <item name="backgroundTint">@color/m3_sys_dark_surface_container_high</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface</item>
         <item name="iconGravity">textStart</item>
-        <item name="iconPadding">@dimen/btn_icon_padding</item>
+        <item name="iconPadding">8dp</item>
         <item name="iconSize">20dp</item>
     </style>
 
-    <!-- Icon-above tile (Scan / Map / Mirror). Uses auto-size so labels never go vertical. -->
+    <!-- Material 3 Expressive Outlined Button -->
+    <style name="Widget.OpenCfMoto.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="cornerRadius">20dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="strokeColor">@color/m3_sys_dark_outline_variant</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface</item>
+    </style>
+
+    <!-- Material 3 Expressive Tile Button -->
     <style name="Widget.OpenCfMoto.Button.Tile" parent="Widget.OpenCfMoto.Button.Tonal">
-        <item name="android:minHeight">@dimen/btn_tile_min_height</item>
-        <item name="android:textSize">@dimen/btn_tile_text</item>
+        <item name="cornerRadius">20dp</item>
+        <item name="android:minHeight">64dp</item>
+        <item name="android:textSize">13sp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
         <item name="android:paddingTop">8dp</item>
         <item name="android:paddingBottom">8dp</item>
         <item name="iconGravity">textTop</item>
-        <item name="iconPadding">@dimen/btn_tile_icon_padding</item>
-        <item name="autoSizeTextType">uniform</item>
-        <item name="autoSizeMinTextSize">@dimen/btn_tile_text_min</item>
-        <item name="autoSizeMaxTextSize">@dimen/btn_tile_text</item>
-        <item name="autoSizeStepGranularity">1sp</item>
+        <item name="iconPadding">6dp</item>
     </style>
 
-    <!-- Text/ghost actions for the log toolbar. -->
+    <!-- Material 3 Expressive Text Button -->
     <style name="Widget.OpenCfMoto.Button.Text" parent="Widget.Material3.Button.TextButton">
-        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface_variant</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
         <item name="iconGravity">textStart</item>
-        <item name="iconTint">@color/text_secondary</item>
+        <item name="iconTint">@color/m3_sys_dark_on_surface_variant</item>
         <item name="iconPadding">6dp</item>
         <item name="iconSize">18dp</item>
     </style>
 
-    <!-- Segmented-control option (selection highlight is applied in code). -->
+    <!-- Material 3 Expressive Segmented Control -->
     <style name="Widget.OpenCfMoto.Segment" parent="Widget.Material3.Button.TonalButton">
-        <item name="cornerRadius">12dp</item>
+        <item name="cornerRadius">16dp</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textSize">@dimen/btn_segment_text</item>
+        <item name="android:textSize">13sp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:minHeight">@dimen/btn_segment_min_height</item>
+        <item name="android:minHeight">44dp</item>
         <item name="android:maxLines">2</item>
         <item name="android:ellipsize">end</item>
+        <item name="backgroundTint">@color/m3_sys_dark_surface_container_high</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface</item>
     </style>
 
-    <style name="Card.OpenCfMoto" parent="Widget.Material3.CardView.Elevated">
-        <item name="cardCornerRadius">22dp</item>
-        <item name="cardBackgroundColor">@color/surface</item>
-        <item name="contentPadding">20dp</item>
+    <!-- Material 3 Expressive Cards -->
+    <style name="Card.OpenCfMoto" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">24dp</item>
+        <item name="cardBackgroundColor">@color/m3_sys_dark_surface_container</item>
+        <item name="strokeColor">@color/m3_sys_dark_outline_variant</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="contentPadding">16dp</item>
+    </style>
+
+    <style name="Card.OpenCfMoto.High" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">24dp</item>
+        <item name="cardBackgroundColor">@color/m3_sys_dark_surface_container_high</item>
+        <item name="strokeColor">@color/m3_sys_dark_outline_variant</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="contentPadding">16dp</item>
     </style>
 
     <style name="Card.OpenCfMoto.Log" parent="Card.OpenCfMoto">
@@ -99,11 +154,11 @@
         <item name="contentPadding">10dp</item>
     </style>
 
-    <!-- Trip computer stat tiles. -->
+    <!-- Trip Stat Labels -->
     <style name="TripStatLabel">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface_variant</item>
         <item name="android:textAllCaps">true</item>
         <item name="android:textSize">11sp</item>
         <item name="android:letterSpacing">0.06</item>
@@ -113,8 +168,17 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginTop">4dp</item>
-        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface</item>
         <item name="android:textSize">24sp</item>
         <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Material 3 Expressive Chip / Badge -->
+    <style name="Chip.OpenCfMoto.Status" parent="Widget.Material3.Chip.Assist">
+        <item name="chipCornerRadius">16dp</item>
+        <item name="chipBackgroundColor">@color/m3_sys_dark_surface_container_high</item>
+        <item name="chipStrokeColor">@color/m3_sys_dark_outline_variant</item>
+        <item name="chipStrokeWidth">1dp</item>
+        <item name="android:textColor">@color/m3_sys_dark_on_surface</item>
     </style>
 </resources>

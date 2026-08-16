@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- M3 Expressive Error Tonal Aura -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#20FFB4AB" />
+            <size android:width="180dp" android:height="180dp" />
+        </shape>
+    </item>
+    <!-- M3 Expressive Error Ring -->
+    <item android:top="16dp" android:bottom="16dp" android:left="16dp" android:right="16dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/m3_sys_dark_surface_container" />
+            <stroke android:width="2dp" android:color="@color/m3_sys_dark_status_error" />
+        </shape>
+    </item>
+    <!-- M3 Expressive Inner Core -->
+    <item android:top="28dp" android:bottom="28dp" android:left="28dp" android:right="28dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/m3_sys_dark_surface_container_high" />
+        </shape>
+    </item>
+</layer-list>

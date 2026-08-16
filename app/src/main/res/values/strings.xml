@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Open CfMoto</string>
+    <string name="app_name">Handly</string>
     <string name="about_copyright">© 2026 Alexandru</string>
     <string name="about_copyright_body">Maintained by Alexandru (zanderp). Free software under the GNU AGPL v3 or later — see LICENSE and NOTICE in the repository for the full copyright and attribution text.</string>
     <string name="about_license_body">You may use, study, share, and modify this app under the AGPL. If you redistribute a modified version (including as a network service), you must offer the complete corresponding source under the same license.</string>
@@ -381,6 +381,12 @@
     <string name="pref_profile_cfdl26_land">CFDL26 landscape touch</string>
     <string name="pref_profile_cfdl26_port">CFDL26 portrait (handlebar-primary)</string>
     <string name="pref_profile_clc450">544×512 near-square</string>
+    <string name="pref_profile_generic_carbit">Generic Carbit (Sware v1.7 / Hware v1.5 compatible)</string>
+    <string name="launcher_open_nav">OPEN NAVIGATION</string>
+    <string name="launcher_google_maps">Google Maps</string>
+    <string name="launcher_waze">Waze</string>
+    <string name="launcher_diagnostics">Diagnostics</string>
+    <string name="launcher_app_title">OPEN MOTORCYCLE LINK</string>
     <string name="pref_map_theme_day">Day (light)</string>
     <string name="pref_map_theme_night">Night (dark)</string>
     <string name="pref_dbltap_fast">200 ms — snappier singles</string>
@@ -545,15 +551,15 @@
 
     <!-- Notifications -->
     <string name="notif_aa_channel">Android Auto receiver</string>
-    <string name="notif_aa_title">OpenCfMoto — Android Auto</string>
+    <string name="notif_aa_title">Handly</string>
     <string name="notif_aa_reconnecting">Reconnecting to the bike dash…</string>
-    <string name="notif_aa_receiving">Receiving Android Auto for the bike dash — tap to open</string>
-    <string name="notif_bike_reconnected">Bike reconnected</string>
-    <string name="notif_tap_resume">Tap to resume projection to the dash</string>
-    <string name="notif_map_title">OpenCfMoto Map</string>
+    <string name="notif_aa_receiving">Receiving navigation for the dashboard — tap to open</string>
+    <string name="notif_bike_reconnected">Motorcycle reconnected</string>
+    <string name="notif_tap_resume">Tap to resume dashboard projection</string>
+    <string name="notif_map_title">Handly Map</string>
     <string name="notif_map_text">Map on the dash — handlebars use your button mapping</string>
     <string name="notif_mirror_channel">Screen mirroring</string>
-    <string name="notif_mirror_title">OpenCfMoto</string>
+    <string name="notif_mirror_title">Handly</string>
     <string name="notif_mirror_text">Mirroring screen to bike</string>
     <string name="notif_media_channel">Bike button control</string>
     <string name="notif_media_title">Android Auto control</string>

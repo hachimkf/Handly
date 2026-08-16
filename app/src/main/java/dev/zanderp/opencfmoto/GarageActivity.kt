@@ -81,6 +81,7 @@ class GarageActivity : AppCompatActivity() {
         }
         container = findViewById(R.id.garage_container)
         empty = findViewById(R.id.garage_empty)
+        findViewById<View>(R.id.garage_back)?.setOnClickListener { finish() }
         findViewById<View>(R.id.garage_scan).setOnClickListener {
             scanLauncher.launch(Intent(this, QrScanActivity::class.java))
         }
@@ -111,15 +112,16 @@ class GarageActivity : AppCompatActivity() {
         val card = MaterialCardView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(10) }
-            radius = dp(18).toFloat()
-            setCardBackgroundColor(ContextCompat.getColor(this@GarageActivity, R.color.surface))
-            setContentPadding(dp(14), dp(12), dp(14), dp(12))
+            ).apply { topMargin = dp(12) }
+            radius = dp(24).toFloat()
+            setCardBackgroundColor(ContextCompat.getColor(this@GarageActivity, R.color.m3_sys_dark_surface_container))
+            strokeColor = ContextCompat.getColor(
+                this@GarageActivity,
+                if (isActive) R.color.m3_sys_dark_primary else R.color.m3_sys_dark_outline_variant
+            )
+            strokeWidth = dp(if (isActive) 2 else 1)
+            setContentPadding(dp(16), dp(14), dp(16), dp(14))
             isClickable = true
-            if (isActive) {
-                strokeWidth = dp(2)
-                strokeColor = ContextCompat.getColor(this@GarageActivity, R.color.brand_orange)
-            }
             setOnClickListener { showActions(bike, isActive) }
         }
 
@@ -136,7 +138,7 @@ class GarageActivity : AppCompatActivity() {
                 setImageBitmap(bmp)
             } else {
                 setImageResource(R.drawable.ic_ride)
-                setColorFilter(ContextCompat.getColor(this@GarageActivity, R.color.brand_orange))
+                setColorFilter(ContextCompat.getColor(this@GarageActivity, R.color.m3_sys_dark_primary))
                 setPadding(dp(10), dp(10), dp(10), dp(10))
             }
         })
@@ -144,20 +146,20 @@ class GarageActivity : AppCompatActivity() {
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { marginStart = dp(14) }
+                .apply { marginStart = dp(16) }
         }
         col.addView(TextView(this).apply {
             text = bike.name
-            setTextColor(ContextCompat.getColor(this@GarageActivity, R.color.text_primary))
+            setTextColor(ContextCompat.getColor(this@GarageActivity, R.color.m3_sys_dark_on_surface))
             textSize = 17f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
         col.addView(TextView(this).apply {
-            text = if (isActive) "Active bike · tap to edit" else (bike.qr?.ssid ?: "tap to select or edit")
+            text = if (isActive) "● Active motorcycle" else "Saved motorcycle"
             setTextColor(
                 ContextCompat.getColor(
                     this@GarageActivity,
-                    if (isActive) R.color.brand_orange else R.color.text_secondary
+                    if (isActive) R.color.m3_sys_dark_primary else R.color.m3_sys_dark_on_surface_variant
                 )
             )
             textSize = 13f
@@ -172,6 +174,7 @@ class GarageActivity : AppCompatActivity() {
         val hasPhoto = bike.photoPath != null
         val items = buildList {
             if (!isActive) add("Use this bike")
+            add("Calibrate display")
             add("Rename")
             add(if (hasPhoto) "Change photo" else "Add photo")
             if (hasPhoto) add("Remove photo")
@@ -186,6 +189,9 @@ class GarageActivity : AppCompatActivity() {
                         BikeMemory.select(this, bike.raw)
                         Toast.makeText(this, "Selected ${bike.name}", Toast.LENGTH_SHORT).show()
                         refresh()
+                    }
+                    "Calibrate display" -> {
+                        startActivity(Intent(this, ScreenMarginsActivity::class.java))
                     }
                     "Rename" -> promptRename(bike)
                     "Add photo", "Change photo" -> {

@@ -62,19 +62,21 @@ data class QrData(
             val mac = formatMac(q["mac"]) ?: formatMac(q["bm"])
             val ssid = q["ssid"].orEmpty().trim()
             val pwd = q["pwd"].orEmpty()
-            val phoneHotspot = (action and 128) != 0 || (ssid.isEmpty() && mac != null && q.containsKey("bm"))
-            if (ssid.isEmpty() && !phoneHotspot) return null
-            if (ssid.isNotEmpty() && pwd.isEmpty() && !phoneHotspot) return null
+            val hasMac = mac != null
+            val phoneHotspot = (action and 128) != 0 || (ssid.isEmpty() && hasMac && q.containsKey("bm"))
+            if (ssid.isEmpty() && !phoneHotspot && !hasMac) return null
+            if (ssid.isNotEmpty() && pwd.isEmpty() && !phoneHotspot && !hasMac) return null
             val display = q["name"]?.takeIf { it.isNotBlank() }
                 ?: if (ssid.isNotEmpty()) null
-                else mac?.let { "Phone hotspot (${it.takeLast(8)})" }
+                else mac?.let { "EC_${it.replace(":", "").uppercase()}" }
+            val resolvedSsid = if (ssid.isNotEmpty()) ssid else (mac?.let { "EC_${it.replace(":", "").uppercase()}" } ?: "")
             return QrData(
-                ssid = ssid.ifEmpty { "PHONE-HOTSPOT-${mac?.replace(":", "").orEmpty().takeLast(6)}" },
+                ssid = resolvedSsid,
                 pwd = pwd,
                 auth = q["auth"],
                 mac = mac,
                 name = display,
-                action = if (phoneHotspot && (action and 128) == 0) action or 128 else action,
+                action = if (hasMac && (action and 8) == 0) action or 8 else action,
                 modelId = q["modelid"],
                 sn = q["sn"],
                 channel = q["channel"],

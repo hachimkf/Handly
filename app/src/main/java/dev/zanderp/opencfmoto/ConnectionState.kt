@@ -36,6 +36,27 @@ object ConnectionState {
     var detail: String = ""
         private set
 
+    data class DashMetadata(
+        val huid: String = "",
+        val huName: String = "",
+        val channel: String = "",
+        val sware: String = "",
+        val hware: String = "",
+        val sdkVersion: String = "",
+        val packageName: String = "",
+        val versionName: String = "",
+    )
+
+    @Volatile
+    var dashMetadata: DashMetadata = DashMetadata()
+        private set
+
+    fun updateDashMetadata(meta: DashMetadata) {
+        dashMetadata = meta
+        DiagnosticsStore.updateConnection(meta = meta)
+        DiagnosticsStore.recordEvent("Dashboard metadata updated: ${meta.huName.ifBlank { meta.huid }} (Sware: ${meta.sware}, Hware: ${meta.hware})")
+    }
+
     /** Observer (MainActivity) — receives (phase, detail) on every transition, on any thread. */
     @Volatile
     var listener: ((Phase, String) -> Unit)? = null
@@ -51,6 +72,20 @@ object ConnectionState {
         val d = detail
         val text = if (d.isBlank()) newPhase.logLabel else "${newPhase.logLabel} — $d"
         LogBus.log("[state] $text")
+        DiagnosticsStore.updateConnection(status = newPhase.logLabel)
+        DiagnosticsStore.recordEvent("Connection phase: $text")
+
+        when (newPhase) {
+            Phase.IDLE, Phase.STOPPED -> ConnectionTrace.transition(ConnectionTrace.Step.APP_STARTED)
+            Phase.STARTING_AA -> ConnectionTrace.transition(ConnectionTrace.Step.QR_AVAILABLE, d)
+            Phase.JOINING_WIFI -> ConnectionTrace.transition(ConnectionTrace.Step.P2P_CONNECTION_STARTED, d)
+            Phase.AA_VIDEO_LIVE -> ConnectionTrace.transition(ConnectionTrace.Step.P2P_CONNECTED, d)
+            Phase.PXC_CONNECTING -> ConnectionTrace.transition(ConnectionTrace.Step.PXC_SOCKET_OPEN, d)
+            Phase.STREAMING, Phase.MIRRORING -> ConnectionTrace.transition(ConnectionTrace.Step.CONNECTED, d)
+            Phase.ERROR -> ConnectionTrace.fail(ConnectionTrace.currentStep, if (d.isNotBlank()) d else "Unexpected error")
+            else -> {}
+        }
+
         try {
             listener?.invoke(newPhase, d)
         } catch (_: Exception) {

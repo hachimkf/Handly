@@ -50,39 +50,14 @@ object AaSelfMode {
         val networkToUse: Parcelable? = (cm.activeNetwork as? Parcelable) ?: createFakeNetwork(0)
         val fakeWifiInfo = createFakeWifiInfo()
 
-        // 1) Activity (older gearhead). Do NOT return on success — AA 16.4+/17.4+ often
-        // startActivity without throwing and then ignore the intent (HUR never ran before).
-        var activityStarted = false
-        try {
-            val intent = Intent().apply {
-                setClassName(
-                    GEARHEAD_PKG,
-                    "com.google.android.apps.auto.wireless.setup.service.impl.WirelessStartupActivity",
-                )
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra("PARAM_HOST_ADDRESS", "127.0.0.1")
-                putExtra("PARAM_SERVICE_PORT", port)
-                networkToUse?.let { putExtra("PARAM_SERVICE_WIFI_NETWORK", it) }
-                fakeWifiInfo?.let { putExtra("wifi_info", it) }
+        // Broadcast only (no visible foreground activity launch)
+        fireWirelessStartupReceiver(app, port, networkToUse, fakeWifiInfo, log)
+        scheduleIfStillNeeded(gen, ESCALATE_WAIT_MS) {
+            if (sessionLive()) {
+                log("[AA] self-mode escalate stop — session live after Receiver")
+                return@scheduleIfStillNeeded
             }
-            log("[AA] launching Android Auto WirelessStartupActivity → 127.0.0.1:$port")
-            context.startActivity(intent)
-            activityStarted = true
-        } catch (e: Exception) {
-            log("[AA] Activity trigger failed (${e.message}); trying broadcast fallback")
-        }
-
-        if (!activityStarted) {
-            // Activity denied — escalate Receiver immediately, then HUR after wait.
-            fireWirelessStartupReceiver(app, port, networkToUse, fakeWifiInfo, log)
-            scheduleIfStillNeeded(gen, ESCALATE_WAIT_MS) {
-                if (sessionLive()) {
-                    log("[AA] self-mode escalate stop — session live after Receiver")
-                    return@scheduleIfStillNeeded
-                }
-                fireHurProjection(app, log)
-            }
-            return
+            fireHurProjection(app, log)
         }
 
         // Activity launched without throw — wait for accept, then Receiver, then HUR.

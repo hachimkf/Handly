@@ -149,6 +149,7 @@ object BikeProfiles {
         MoriniMlSoftApProfile,
         Cfdl16MotoPlayLandscapeProfile,
         ClC450Profile,
+        GenericCarbitProfile,
         Cfdl26LandscapeProfile,
         Cfdl26PortraitProfile,
         LegacyCfdl16Profile,
@@ -274,7 +275,12 @@ object BikeProfileHolder {
 
 /** Shared base CLIENT_INFO reply. Keys/order match the original PxcHandshake.buildClientInfoReply so
  *  that LegacyCfdl16Profile (supportFunction=0) produces byte-identical output. */
-private fun basePhoneClientInfo(huid: String?, phoneUuid: String, supportFunction: Int): JSONObject =
+private fun basePhoneClientInfo(
+    huid: String?,
+    phoneUuid: String,
+    supportFunction: Int,
+    pkg: String = EasyConnProber.SPOOFED_PACKAGE,
+): JSONObject =
     JSONObject().apply {
         put("pxcVersion", "1.0.2")
         put("phoneUUID", phoneUuid)
@@ -282,7 +288,7 @@ private fun basePhoneClientInfo(huid: String?, phoneUuid: String, supportFunctio
         put("phoneModel", Build.MODEL)
         put("phoneOsVersion", Build.VERSION.SDK_INT.toString())
         put("phoneOs", "Android")
-        put("package", EasyConnProber.SPOOFED_PACKAGE)
+        put("package", pkg)
         put("versionCode", 126)
         put("token", 0)
         put("pubkey", RsaKeys.publicKeyBase64)
@@ -807,3 +813,65 @@ object Cfdl26LandscapeProfile : BikeProfile {
         return Cfdl26PortraitProfile.handleUnknownControl(tag, frame, out, log)
     }
 }
+
+/**
+ * Generic Carbit / EasyRide / MotoPlay Profile.
+ *
+ * Specifically designed for standard Carbit Ride dashboards (e.g. Sware v1.7 / Hware v1.5,
+ * package net.easyconn.easyride.wws or net.easyconn, HUID CARB...), as well as unknown
+ * Carbit/EasyConnect motorcycles that connect using a Carbit/EasyConnect QR code.
+ *
+ * Capabilities:
+ *  - Full notify burst auto-acknowledgments (cmd + 1) for 0x103a0, 0x10020, 0x10780, 0x10450, etc.
+ *  - Dual heartbeat support
+ *  - Advertises package "net.easyconn.easyride.wws" and supportFunction = 128
+ *  - Dynamic geometry learning via DashMemory
+ */
+object GenericCarbitProfile : BikeProfile {
+    override val name = "Generic Carbit / EasyRide (Sware v1.7 / Hware v1.5)"
+    override val requiresSockServerAuth = false
+    override val supportsScreenTouch = true
+    override val advertisedSupportFunction = 128
+    override val aaVideo = AaVideoSpec(AaResolution.LANDSCAPE_800x480, dpi = 160)
+
+    override fun matchesModelId(modelId: String): Boolean {
+        val m = modelId.trim().lowercase()
+        return m == "40603" || m.contains("carbit") || m.contains("easyride") || m.contains("easyconn")
+    }
+
+    override fun score(info: JSONObject): Int {
+        var s = 0
+        val huid = info.optString("HUID").ifEmpty { info.optString("huid") }
+        val pkg = info.optString("package_name").ifEmpty { info.optString("package") }
+        val versionName = info.optString("version_name")
+        val sware = info.optString("Sware").ifEmpty { info.optString("sware") }
+        val hware = info.optString("Hware").ifEmpty { info.optString("hware") }
+
+        if (huid.startsWith("CARB", ignoreCase = true)) s += 10
+        if (pkg.contains("easyride", ignoreCase = true) || pkg.contains("easyconn", ignoreCase = true)) s += 8
+        if (sware.isNotEmpty() || hware.isNotEmpty()) s += 6
+        if (sware.contains("1.7", ignoreCase = true) || hware.contains("1.5", ignoreCase = true)) s += 4
+        if (info.optInt("flavor", 0) != 0) s += 2
+
+        // If it's a generic Carbit connection with no CFMOTO/Morini brand markers, give it bonus score
+        if (s > 0 && !versionName.startsWith("CFDL") && !pkg.contains("cfmoto")) {
+            s += 5
+        }
+        return s
+    }
+
+    override fun buildClientInfoReply(info: JSONObject, huid: String?, phoneUuid: String): JSONObject {
+        val bikePkg = info.optString("package_name").ifEmpty { info.optString("package") }
+        val replyPkg = if (bikePkg.isNotBlank()) bikePkg else "net.easyconn.easyride.wws"
+        return basePhoneClientInfo(huid, phoneUuid, advertisedSupportFunction, replyPkg).apply {
+            if (BikeProfileHolder.advertisesScreenTouch) put("supportScreenTouch", true)
+        }
+    }
+
+    override fun handleUnknownControl(
+        tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
+    ): Boolean {
+        return Cfdl26PortraitProfile.handleUnknownControl(tag, frame, out, log)
+    }
+}
+

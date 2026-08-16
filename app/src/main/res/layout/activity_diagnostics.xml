@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- Part of Open Motorcycle Link / OpenCfMoto -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/diagnostics_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/m3_sys_dark_surface"
+    android:orientation="vertical">
+
+    <!-- Header bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="12dp">
+
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_icon_container">
+
+            <ImageView
+                android:id="@+id/btn_diag_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Back"
+                android:padding="8dp"
+                android:src="@drawable/ic_man_left"
+                app:tint="@color/m3_sys_dark_on_surface" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:letterSpacing="0.04"
+            android:text="LIVE DIAGNOSTICS"
+            android:textColor="@color/m3_sys_dark_on_surface"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_diag_export"
+            style="@style/Widget.OpenCfMoto.Button.Tonal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Export"
+            android:textColor="@color/m3_sys_dark_primary"
+            app:icon="@drawable/ic_logs"
+            app:iconTint="@color/m3_sys_dark_primary" />
+    </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 1. Connection Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Card.OpenCfMoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.04"
+                        android:text="CONNECTION METADATA"
+                        android:textColor="@color/m3_sys_dark_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diag_conn_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/m3_sys_dark_on_surface"
+                        android:textSize="13sp"
+                        tools:text="Status: CONNECTED\nDashboard: VOGE DS800\nHUID: CARB123456\nSoftware: Sware 1.7\nHardware: Hware 1.5" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 2. Network Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Card.OpenCfMoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.04"
+                        android:text="NETWORK TRANSPORT"
+                        android:textColor="@color/m3_sys_dark_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diag_network_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/m3_sys_dark_on_surface"
+                        android:textSize="13sp"
+                        tools:text="Transport: SoftAP\nWi-Fi: CONNECTED\nPhone IP: 192.168.43.100\nDash IP: 192.168.43.1\nGateway: 192.168.43.1" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 3. PXC Protocol Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Card.OpenCfMoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.04"
+                        android:text="PXC PROTOCOL"
+                        android:textColor="@color/m3_sys_dark_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diag_pxc_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/m3_sys_dark_on_surface"
+                        android:textSize="13sp"
+                        tools:text="Protocol: 1.0.2\nSession: ACTIVE\nHandshake: COMPLETE\nHeartbeat: ACTIVE (RX)\nRX Packets: 124 (18.4 KB)\nTX Packets: 118 (14.2 KB)" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 4. Media & Video Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Card.OpenCfMoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.04"
+                        android:text="MEDIA &amp; VIDEO PIPELINE"
+                        android:textColor="@color/m3_sys_dark_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diag_media_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/m3_sys_dark_on_surface"
+                        android:textSize="13sp"
+                        tools:text="State: STREAMING\nResolution: 800x480\nFPS: 30.0 fps\nBitrate: 2.50 Mbps\nDropped Frames: 0\nPort: 10920" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 5. Input Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Card.OpenCfMoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.04"
+                        android:text="INPUT &amp; CONTROLS"
+                        android:textColor="@color/m3_sys_dark_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diag_input_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/m3_sys_dark_on_surface"
+                        android:textSize="13sp"
+                        tools:text="Touch: AVAILABLE\nHandlebar: AVAILABLE\nTotal Events: 42\nLast Event: TOUCH - action=DOWN (x=410, y=220)" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 6. Live Event Timeline -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Card.OpenCfMoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.04"
+                        android:text="LIVE EVENT TIMELINE"
+                        android:textColor="@color/m3_sys_dark_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diag_events_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="3dp"
+                        android:textColor="@color/m3_sys_dark_on_surface_variant"
+                        android:textSize="12sp"
+                        tools:text="16:31:12  PXC session established\n16:31:12  Dashboard metadata received\n16:31:13  Media channel opened" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>
