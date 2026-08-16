@@ -138,13 +138,27 @@ object CarbitConnectionManager {
         thread(name = "hotspot-flow", isDaemon = true) {
             val deadline = System.currentTimeMillis() + 60_000L
             var notifiedSettings = false
+            var btProvisionAttempted = false
 
             while (System.currentTimeMillis() < deadline) {
                 val subnets = PhoneHotspotScan.tetheringSubnets()
-                if (subnets.isEmpty()) {
+                val isHotspotActive = subnets.isNotEmpty()
+                val activeSubnet = subnets.firstOrNull()
+
+                LogBus.log(
+                    "$TAG [HOTSPOT DIAGNOSTICS] " +
+                        "HOTSPOT_STATE=${if (isHotspotActive) "ON" else "OFF"} " +
+                        "HOTSPOT_INTERFACE=${activeSubnet?.interfaceName ?: "NONE"} " +
+                        "HOTSPOT_SSID=<hidden> " +
+                        "HOTSPOT_GATEWAY=${activeSubnet?.localAddress?.hostAddress ?: "NONE"} " +
+                        "HOTSPOT_SUBNET=${activeSubnet?.let { "${it.localAddress.hostAddress}/${it.prefixLength}" } ?: "NONE"} " +
+                        "HOTSPOT_CLIENT_COUNT=UNAVAILABLE",
+                )
+
+                if (!isHotspotActive || activeSubnet == null) {
                     if (!notifiedSettings) {
                         notifiedSettings = true
-                        LogBus.log("$TAG [HOTSPOT] No active tethering subnet detected — please enable Mobile Hotspot")
+                        LogBus.log("$TAG [HOTSPOT] Wi-Fi tethering interface not found — requesting user to enable Mobile Hotspot")
                         ConnectionTrace.transition(
                             ConnectionTrace.Step.PHONE_HOTSPOT_REQUIRED,
                             "Turn on Mobile Hotspot in Android settings",
@@ -152,17 +166,33 @@ object CarbitConnectionManager {
                         ConnectionState.set(Phase.JOINING_WIFI, "Turn on Mobile Hotspot")
                         PhoneHotspotAssist.openHotspotSettings(context)
                     }
-                    Thread.sleep(1500L)
+                    Thread.sleep(2000L)
                     continue
                 }
 
-                val subnet = subnets.first()
-                LogBus.log("$TAG [HOTSPOT] Tethering subnet active: local IP=${subnet.localAddress.hostAddress} (${subnet.interfaceName})")
+                val subnet = activeSubnet
                 ConnectionTrace.transition(
                     ConnectionTrace.Step.PHONE_HOTSPOT_ENABLED,
                     "Local IP=${subnet.localAddress.hostAddress}, iface=${subnet.interfaceName}",
                 )
                 ConnectionState.set(Phase.JOINING_WIFI, "Waiting for motorcycle...")
+
+                // Concurrently attempt Bluetooth SDP AP provisioning if MAC is present
+                val btMac = qr.mac
+                if (!btProvisionAttempted && !btMac.isNullOrBlank()) {
+                    btProvisionAttempted = true
+                    val creds = PhoneHotspotAssist.loadCreds(context)
+                    thread(name = "bt-provision", isDaemon = true) {
+                        CarbitBtBridge.sendApInfo(
+                            context = context,
+                            btMac = btMac,
+                            ssid = creds.ssid.ifBlank { "Mobile Hotspot" },
+                            pwd = creds.pwd,
+                            phoneIp = subnet.localAddress.hostAddress ?: "192.168.43.1",
+                            log = { LogBus.log("$TAG $it") },
+                        )
+                    }
+                }
 
                 // Scan for motorcycle peer joining the hotspot
                 val peer = PhoneHotspotScan.findEasyConnPeer(subnet) { LogBus.log("$TAG $it") }

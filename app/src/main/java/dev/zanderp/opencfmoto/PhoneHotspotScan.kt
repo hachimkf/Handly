@@ -21,7 +21,13 @@ import kotlin.math.abs
  */
 object PhoneHotspotScan {
 
-    private val LIKELY_AP_PREFIXES = listOf("ap", "swlan", "wlan1", "softap", "rndis", "tether")
+    private val EXCLUDED_INTERFACE_PREFIXES = listOf(
+        "rmnet", "ccmni", "pdp", "wwan", "clat", "tun", "tap", "ppp",
+        "dummy", "lo", "sit", "ip6tnl", "oem", "nm_", "ifb", "bond", "wlan0",
+    )
+    private val KNOWN_HOTSPOT_PREFIXES = listOf(
+        "ap", "swlan", "softap", "wlan1", "wlan2", "tether_wlan", "wigig", "rndis", "bt-pan", "tether",
+    )
     private const val PROBE_CONNECT_MS = 250
     private val PROBE_PORTS = listOf(10930, 10920, 10921, 10922)
 
@@ -60,6 +66,12 @@ object PhoneHotspotScan {
     ): List<Subnet> =
         interfaces
             .filter { it.isUp && !it.isLoopback && !it.isPointToPoint }
+            .filter { candidate ->
+                val lowered = candidate.name.lowercase()
+                val isExcluded = EXCLUDED_INTERFACE_PREFIXES.any { lowered.startsWith(it) }
+                val isKnownHotspot = KNOWN_HOTSPOT_PREFIXES.any { lowered.startsWith(it) }
+                !isExcluded || isKnownHotspot
+            }
             .flatMap { candidate ->
                 candidate.addresses.mapNotNull { (address, prefixLength) ->
                     val ipv4 = address as? Inet4Address ?: return@mapNotNull null
@@ -69,6 +81,11 @@ object PhoneHotspotScan {
                     }
                     if (!ipv4.isSiteLocalAddress) return@mapNotNull null
                     if (prefixLength < 24 || prefixLength > 30) return@mapNotNull null
+                    // Exclude carrier CGNAT ranges (100.64.0.0/10) and cellular private ranges if interface is suspicious
+                    val host = ipv4.hostAddress ?: ""
+                    if (host.startsWith("100.") || (host.startsWith("10.") && !KNOWN_HOTSPOT_PREFIXES.any { candidate.name.lowercase().startsWith(it) })) {
+                        return@mapNotNull null
+                    }
                     Subnet(ipv4, prefixLength, candidate.name)
                 }
             }
@@ -76,8 +93,8 @@ object PhoneHotspotScan {
 
     private fun rank(interfaceName: String): Int {
         val lowered = interfaceName.lowercase()
-        val index = LIKELY_AP_PREFIXES.indexOfFirst(lowered::startsWith)
-        return if (index < 0) LIKELY_AP_PREFIXES.size else index
+        val index = KNOWN_HOTSPOT_PREFIXES.indexOfFirst(lowered::startsWith)
+        return if (index < 0) KNOWN_HOTSPOT_PREFIXES.size else index
     }
 
     /** Hosts a dash could hold on [subnet], nearest the phone first (DHCP pool usually follows). */

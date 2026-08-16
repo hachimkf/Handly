@@ -8,12 +8,15 @@ import java.net.InetAddress
 
 class PhoneHotspotScanTest {
     @Test
-    fun prefersApPrefixedInterfaces() {
+    fun prefersApPrefixedInterfacesAndExcludesCellular() {
         val ap = iface("ap0", "192.168.43.1", 24)
-        val wlan = iface("wlan0", "192.168.1.10", 24)
-        val subnets = PhoneHotspotScan.tetheringSubnets(listOf(wlan, ap))
+        val cellular = iface("rmnet_data0", "10.113.98.161", 30)
+        val swlan = iface("swlan0", "192.168.50.1", 24)
+        val subnets = PhoneHotspotScan.tetheringSubnets(listOf(cellular, swlan, ap))
         assertEquals(2, subnets.size)
+        assertTrue(subnets.none { it.interfaceName == "rmnet_data0" })
         assertEquals("ap0", subnets.first().interfaceName)
+        assertEquals("swlan0", subnets[1].interfaceName)
     }
 
     @Test
