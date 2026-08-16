@@ -42,7 +42,39 @@ object DependencyPrompt {
         OPEN_SETUP,
     }
 
-    fun audit(ctx: android.content.Context, forScan: Boolean = false): List<Issue> = buildList {
+    /** Audit dependencies required ONLY for Carbit connection (Bluetooth, Location, Wi-Fi, Camera). */
+    fun auditConnection(ctx: android.content.Context, forScan: Boolean = false): List<Issue> = buildList {
+        val missingPerms = SetupHelper.missingConnectPermissions(ctx).toMutableList()
+        if (forScan || !BikeMemory.hasSaved(ctx)) {
+            missingPerms += SetupHelper.missingScanPermissions(ctx)
+        }
+        val missing = missingPerms.distinct()
+        if (missing.isNotEmpty()) {
+            add(
+                Issue(
+                    id = "perms",
+                    title = "Connection permissions",
+                    detail = "Still needed: ${missing.joinToString(", ") { permLabel(it) }}.",
+                    required = true,
+                    action = Action.GRANT_PERMISSIONS,
+                ),
+            )
+        }
+        if (!WifiGate.isWifiEnabled(ctx)) {
+            add(
+                Issue(
+                    id = "wifi",
+                    title = "Phone Wi‑Fi is off",
+                    detail = "The motorcycle link uses Wi‑Fi. Turn Wi‑Fi on before Connect.",
+                    required = true,
+                    action = Action.ENABLE_WIFI,
+                ),
+            )
+        }
+    }
+
+    /** Audit dependencies required ONLY for Android Auto Navigation / Projection. */
+    fun auditNavigation(ctx: android.content.Context): List<Issue> = buildList {
         if (!SetupHelper.isAndroidAutoInstalled(ctx)) {
             add(
                 Issue(
@@ -65,82 +97,34 @@ object DependencyPrompt {
                 ),
             )
         }
-        val missingPerms = SetupHelper.missingConnectPermissions(ctx).toMutableList()
-        if (forScan || !BikeMemory.hasSaved(ctx)) {
-            missingPerms += SetupHelper.missingScanPermissions(ctx)
-        }
-        val missing = missingPerms.distinct()
-        if (missing.isNotEmpty()) {
-            add(
-                Issue(
-                    id = "perms",
-                    title = "App permissions",
-                    detail = "Still needed: ${missing.joinToString(", ") { permLabel(it) }}.",
-                    required = true,
-                    action = Action.GRANT_PERMISSIONS,
-                ),
-            )
-        }
-        // Wi‑Fi is advisory here only — [WifiGate] already prompts when Connect actually runs.
-        if (!WifiGate.isWifiEnabled(ctx)) {
-            add(
-                Issue(
-                    id = "wifi",
-                    title = "Phone Wi‑Fi is off",
-                    detail = "The bike link uses Wi‑Fi. Turn Wi‑Fi on before Connect.",
-                    required = false,
-                    action = Action.ENABLE_WIFI,
-                ),
-            )
-        }
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            add(
-                Issue(
-                    id = "mic",
-                    title = "Microphone (optional)",
-                    detail = "Needed for Voice / Assistant on the pad. You can grant it later when you use Voice.",
-                    required = false,
-                    action = Action.GRANT_PERMISSIONS,
-                ),
-            )
-        }
-        if (!SetupHelper.canAutoResume(ctx)) {
-            add(
-                Issue(
-                    id = "overlay",
-                    title = "Display over other apps (optional)",
-                    detail = "Lets OpenCfMoto relaunch Android Auto after a long stop without tapping a notification.",
-                    required = false,
-                    action = Action.OPEN_OVERLAY,
-                ),
-            )
-        }
     }
 
-    fun requiredMissing(ctx: android.content.Context, forScan: Boolean = false): List<Issue> =
-        audit(ctx, forScan).filter { it.required }
+    fun audit(ctx: android.content.Context, forScan: Boolean = false): List<Issue> =
+        auditConnection(ctx, forScan) + auditNavigation(ctx)
 
-    /**
-     * Soft launch hint — only for hard blockers (AA / Play services), and never while a connect
-     * is already starting. Permissions are handled on Connect / Scan so we don't race auto-connect.
-     */
+    fun requiredMissing(ctx: android.content.Context, forScan: Boolean = false): List<Issue> =
+        auditConnection(ctx, forScan).filter { it.required }
+
     fun showOnLaunchIfNeeded(activity: Activity): Boolean {
-        if (shownThisProcess) return false
-        if (ConnectionState.phase.busy) return false
-        val missing = requiredMissing(activity, forScan = false).filter {
-            it.action == Action.INSTALL_ANDROID_AUTO || it.action == Action.INSTALL_PLAY_SERVICES
-        }
+        return false
+    }
+
+    /** Block Connect / Scan only when a required CONNECTION permission or Wi-Fi is missing. */
+    fun showForConnect(activity: Activity, forScan: Boolean = false): Boolean {
+        val missing = auditConnection(activity, forScan).filter { it.required }
         if (missing.isEmpty()) return false
-        shownThisProcess = true
+        val permIssue = missing.firstOrNull { it.action == Action.GRANT_PERMISSIONS }
+        if (permIssue != null) {
+            fix(activity, permIssue)
+            return true
+        }
         show(activity, missing, alsoOptional = false)
         return true
     }
 
-    /** Block Connect / Scan when something truly required is missing. */
-    fun showForConnect(activity: Activity, forScan: Boolean = false): Boolean {
-        val missing = requiredMissing(activity, forScan)
+    /** Block Navigation when Android Auto or Play Services is missing. */
+    fun showForNavigation(activity: Activity): Boolean {
+        val missing = auditNavigation(activity).filter { it.required }
         if (missing.isEmpty()) return false
         show(activity, missing, alsoOptional = false)
         return true

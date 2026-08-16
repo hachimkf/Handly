@@ -305,24 +305,30 @@ class MainActivity : AppCompatActivity() {
 
         // Connect while idle; Stop while busy / projecting (merged former Stop button).
         connectBtn.setOnClickListener {
+            log("→ Connect button pressed")
             val phase = ConnectionState.phase
             if (phase.busy || phase == Phase.STREAMING || phase == Phase.MIRRORING) {
                 stopEverything()
                 return@setOnClickListener
             }
-            if (DependencyPrompt.showForConnect(this, forScan = false)) {
-                log("→ Connect blocked — missing dependencies (see dialog)")
+            if (!WifiGate.ensureEnabledOrPrompt(this)) {
+                log("→ Connect blocked — Wi-Fi is off")
                 return@setOnClickListener
             }
+            if (!ensureConnectionPermissions(forScan = false)) {
+                log("→ Connect blocked — requesting missing permissions")
+                return@setOnClickListener
+            }
+            log("→ connection dependencies OK")
+
             val saved = BikeMemory.lastQr(this)
             if (saved != null) {
-                log("→ Connect: reusing saved bike '${BikeMemory.lastBikeName(this)}' (no scan needed)")
+                log("→ CarbitConnectionManager.connect() for saved bike '${BikeMemory.lastBikeName(this)}'")
                 ProjectionHolder.projection = null
                 GpxSession.clear()
-                ensureLocationPermission()
                 CarbitConnectionManager.connect(this, saved)
             } else {
-                log("→ Connect: no saved bike — scan the dash QR.")
+                log("→ No saved bike — launching QR scan")
                 startScan()
             }
         }
@@ -575,15 +581,32 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun ensureConnectionPermissions(forScan: Boolean = false): Boolean {
+        val missing = SetupHelper.missingConnectPermissions(this).toMutableList()
+        if (forScan || !BikeMemory.hasSaved(this)) {
+            missing += SetupHelper.missingScanPermissions(this)
+        }
+        val required = missing.distinct()
+        if (required.isNotEmpty()) {
+            log("→ Requesting connection permissions: ${required.joinToString(", ")}")
+            ActivityCompat.requestPermissions(this, required.toTypedArray(), 101)
+            return false
+        }
+        return true
+    }
+
     /** Launch the QR scanner (profile is chosen from the scan result). */
     private fun startScan() {
-        if (DependencyPrompt.showForConnect(this, forScan = true)) {
-            log("→ Scan blocked — missing dependencies (see dialog)")
+        if (!WifiGate.ensureEnabledOrPrompt(this)) {
+            log("→ Scan blocked — Wi-Fi is off")
+            return
+        }
+        if (!ensureConnectionPermissions(forScan = true)) {
+            log("→ Scan blocked — requesting camera/location permissions")
             return
         }
         log("→ Scan: scan the motorcycle dashboard QR.")
         ProjectionHolder.projection = null
-        ensureLocationPermission()
         try {
             scanLauncher.launch(Intent(this, QrScanActivity::class.java))
         } catch (e: Exception) {
@@ -770,8 +793,17 @@ class MainActivity : AppCompatActivity() {
 
     /** Re-run the one-tap Connect for the saved bike (used after closing the rival app). */
     private fun reconnectSavedBike() {
+        log("→ Reconnect saved bike pressed")
+        if (!WifiGate.ensureEnabledOrPrompt(this)) {
+            log("→ Reconnect blocked — Wi-Fi is off")
+            return
+        }
+        if (!ensureConnectionPermissions(forScan = false)) {
+            log("→ Reconnect blocked — requesting missing permissions")
+            return
+        }
+        log("→ CarbitConnectionManager.reconnect()")
         ProjectionHolder.projection = null
-        ensureLocationPermission()
         CarbitConnectionManager.reconnect(this)
     }
 
@@ -780,6 +812,10 @@ class MainActivity : AppCompatActivity() {
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle("Navigation")
             .setItems(options) { _, which ->
+                if (DependencyPrompt.showForNavigation(this)) {
+                    log("→ Navigation blocked — Android Auto / Play Services required")
+                    return@setItems
+                }
                 when (which) {
                     0 -> NavigationLauncher.openGoogleMaps(this)
                     1 -> NavigationLauncher.openWaze(this)

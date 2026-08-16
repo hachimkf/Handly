@@ -32,10 +32,15 @@ object SetupHelper {
         false
     }
 
-    /** Permissions needed to join the bike and run the AA service (reconnect / auto-connect). */
+    /** Permissions needed for Carbit P2P/Wi-Fi connection and discovery. */
     fun connectPermissions(): List<String> = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.BLUETOOTH_SCAN)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.NEARBY_WIFI_DEVICES)
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
