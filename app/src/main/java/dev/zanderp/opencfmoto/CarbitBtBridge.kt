@@ -32,9 +32,10 @@ object CarbitBtBridge {
 
     val SDP_UUID: UUID = UUID.fromString("9f03b326-5d75-46f1-9a39-b71f144d1d97")
 
-    const val CMD_CONN_TYPE_P2C = 524288   // 0x00080000
-    const val CMD_CLIENT_INFO    = 524304   // 0x00080010
-    const val CMD_NOTIFY_AP_INFO = 524352   // 0x00080040
+    const val CMD_CONN_TYPE_P2C     = 524288   // 0x00080000
+    const val CMD_CLIENT_INFO        = 524304   // 0x00080010
+    const val CMD_REQUEST_BUILD_NET  = 524320   // 0x00080020
+    const val CMD_NOTIFY_AP_INFO     = 524352   // 0x00080040
 
     data class Frame(val cmd: Int, val payload: ByteArray) {
         val jsonString: String get() = String(payload, StandardCharsets.UTF_8)
@@ -49,7 +50,7 @@ object CarbitBtBridge {
         return head.array() + payload
     }
 
-    fun readFrame(input: InputStream, timeoutMs: Int = 3000): Frame? {
+    fun readFrame(input: InputStream): Frame? {
         val headBuf = ByteArray(16)
         var readTotal = 0
         while (readTotal < 16) {
@@ -74,10 +75,17 @@ object CarbitBtBridge {
         return Frame(cmd, body)
     }
 
+    private fun bytesToHex(bytes: ByteArray, maxBytes: Int = 32): String {
+        val take = bytes.take(maxBytes)
+        val hex = take.joinToString("") { "%02X".format(it) }
+        return if (bytes.size > maxBytes) "$hex... (${bytes.size}B)" else "$hex (${bytes.size}B)"
+    }
+
     @SuppressLint("MissingPermission")
     fun sendApInfo(
         context: Context,
         btMac: String,
+        ifaceName: String,
         ssid: String,
         pwd: String,
         phoneIp: String,
@@ -85,10 +93,16 @@ object CarbitBtBridge {
         log: (String) -> Unit = {},
     ): Boolean {
         log("[BT-BRIDGE] Starting Bluetooth AP provisioning to MAC=$btMac...")
+        ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_PROVISION_STARTED, "MAC=$btMac")
+
         val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val adapter = btManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
         if (adapter == null || !adapter.isEnabled) {
-            log("[BT-BRIDGE] Bluetooth is disabled or unavailable")
+            log("[BT-BRIDGE] Bluetooth adapter is disabled or unavailable")
+            ConnectionTrace.fail(
+                ConnectionTrace.Step.BLUETOOTH_PROVISION_STARTED,
+                "Bluetooth is disabled or unavailable",
+            )
             return false
         }
 
@@ -96,59 +110,118 @@ object CarbitBtBridge {
             adapter.getRemoteDevice(btMac)
         } catch (e: Exception) {
             log("[BT-BRIDGE] Invalid Bluetooth MAC '$btMac': ${e.message}")
+            ConnectionTrace.fail(
+                ConnectionTrace.Step.BLUETOOTH_DEVICE_FOUND,
+                "Invalid Bluetooth MAC: ${e.message}",
+            )
             return false
         }
 
+        log("[BT-BRIDGE] Bluetooth device found: name='${device.name}' bonded=${device.bondState == BluetoothDevice.BOND_BONDED}")
+        ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_DEVICE_FOUND, "name=${device.name ?: "unknown"}, MAC=$btMac")
+
         var socket: BluetoothSocket? = null
         try {
-            log("[BT-BRIDGE] Connecting RFCOMM socket to $btMac (UUID=$SDP_UUID)...")
+            log("[BT-BRIDGE] Connecting RFCOMM socket to $btMac (SDP UUID=$SDP_UUID)...")
             socket = device.createRfcommSocketToServiceRecord(SDP_UUID)
             socket.connect()
             log("[BT-BRIDGE] RFCOMM socket connected!")
+            ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_RFCOMM_CONNECTED, "UUID=$SDP_UUID")
 
             val out = socket.outputStream
             val inp = socket.inputStream
 
-            // 1. Send EBT_CONN_TYPE_P2C
-            log("[BT-BRIDGE] -> EBT_CONN_TYPE_P2C (0x00080000)")
-            out.write(encodeFrame(CMD_CONN_TYPE_P2C, ByteArray(0)))
+            // 1. Send EBT_CONN_TYPE_P2C (0x00080000)
+            val p2cFrame = encodeFrame(CMD_CONN_TYPE_P2C, ByteArray(0))
+            log("[BT-BRIDGE] [BT-HEX-TX] EBT_CONN_TYPE_P2C: ${bytesToHex(p2cFrame)}")
+            out.write(p2cFrame)
             out.flush()
+            ConnectionTrace.transition(ConnectionTrace.Step.EBT_CONN_TYPE_P2C_SENT)
 
-            // 2. Send EBT_P2C_CLIENT_INFO
-            val clientInfoJson = JSONObject().apply {
-                put("brand", android.os.Build.BRAND)
-                put("model", android.os.Build.MODEL)
-                put("version", "1.7.0")
-            }
-            log("[BT-BRIDGE] -> EBT_P2C_CLIENT_INFO: $clientInfoJson")
-            out.write(encodeFrame(CMD_CLIENT_INFO, clientInfoJson.toString().toByteArray(StandardCharsets.UTF_8)))
-            out.flush()
-
-            // 3. Optional: Read response
+            // Read optional ACK
             try {
-                val resp = readFrame(inp, timeoutMs = 2000)
-                if (resp != null) {
-                    log("[BT-BRIDGE] <- Bike response: 0x${Integer.toHexString(resp.cmd)} ${resp.jsonString}")
+                val ack1 = readFrame(inp)
+                if (ack1 != null) {
+                    log("[BT-BRIDGE] [BT-HEX-RX] ACK 0x${Integer.toHexString(ack1.cmd)}: ${bytesToHex(ack1.payload)}")
                 }
             } catch (e: Exception) {
-                log("[BT-BRIDGE] Read response error (ignoring): ${e.message}")
+                log("[BT-BRIDGE] Read ACK1 error (continuing): ${e.message}")
             }
 
-            // 4. Send EBT_P2C_NOTIFY_AP_INFO
+            // 2. Send EBT_P2C_CLIENT_INFO (0x00080010)
+            val clientInfoJson = JSONObject().apply {
+                put("phoneType", 0)
+                put("phoneID", btMac)
+                put("phoneName", android.os.Build.MODEL)
+                put("packageName", "net.easyconn.easyride.wws")
+                val netArr = org.json.JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("name", ifaceName)
+                        put("addr", phoneIp)
+                        put("mask", "255.255.255.0")
+                    })
+                }
+                put("netInterface", netArr)
+            }
+            val clientInfoPayload = clientInfoJson.toString().toByteArray(StandardCharsets.UTF_8)
+            val clientInfoFrame = encodeFrame(CMD_CLIENT_INFO, clientInfoPayload)
+            log("[BT-BRIDGE] [BT-HEX-TX] EBT_P2C_CLIENT_INFO ($clientInfoJson): ${bytesToHex(clientInfoFrame)}")
+            out.write(clientInfoFrame)
+            out.flush()
+            ConnectionTrace.transition(ConnectionTrace.Step.EBT_CLIENT_INFO_SENT)
+
+            // Read bike response (status 2 = request AP info)
+            var bikeStatus = -1
+            try {
+                val resp = readFrame(inp)
+                if (resp != null) {
+                    log("[BT-BRIDGE] [BT-HEX-RX] Bike response: 0x${Integer.toHexString(resp.cmd)} ${resp.jsonString}")
+                    val json = JSONObject(resp.jsonString)
+                    bikeStatus = json.optInt("status", -1)
+                    log("[BT-BRIDGE] Bike status received: status=$bikeStatus")
+                    ConnectionTrace.transition(ConnectionTrace.Step.EBT_HOTSPOT_REQUEST_RECEIVED, "status=$bikeStatus")
+                }
+            } catch (e: Exception) {
+                log("[BT-BRIDGE] Read bike status response: ${e.message}")
+            }
+
+            // 3. Send EBT_P2C_NOTIFY_AP_INFO (0x00080040)
             val apJson = JSONObject().apply {
                 put("ssid", ssid)
                 put("pwd", pwd)
                 put("auth", auth)
                 put("ip", phoneIp)
             }
-            log("[BT-BRIDGE] -> EBT_P2C_NOTIFY_AP_INFO (0x00080040): $apJson")
-            out.write(encodeFrame(CMD_NOTIFY_AP_INFO, apJson.toString().toByteArray(StandardCharsets.UTF_8)))
+            val apJsonRedacted = JSONObject().apply {
+                put("ssid", "<hidden>")
+                put("pwd", "<hidden>")
+                put("auth", auth)
+                put("ip", phoneIp)
+            }
+            val apPayload = apJson.toString().toByteArray(StandardCharsets.UTF_8)
+            val apFrame = encodeFrame(CMD_NOTIFY_AP_INFO, apPayload)
+            log("[BT-BRIDGE] [BT-HEX-TX] EBT_P2C_NOTIFY_AP_INFO ($apJsonRedacted): length=${apFrame.size}B")
+            out.write(apFrame)
             out.flush()
+            ConnectionTrace.transition(ConnectionTrace.Step.EBT_AP_INFO_SENT)
 
-            log("[BT-BRIDGE] *** Bluetooth AP provisioning successfully sent to motorcycle! ***")
+            // Read final ACK
+            try {
+                val finalAck = readFrame(inp)
+                if (finalAck != null) {
+                    log("[BT-BRIDGE] [BT-HEX-RX] Final ACK 0x${Integer.toHexString(finalAck.cmd)}: ${bytesToHex(finalAck.payload)}")
+                }
+            } catch (_: Exception) {}
+
+            log("[BT-BRIDGE] *** Motorcycle Wi-Fi AP provisioning complete! ***")
+            ConnectionTrace.transition(ConnectionTrace.Step.MOTORCYCLE_WIFI_PROVISIONED, "SSID=<hidden>, IP=$phoneIp")
             return true
         } catch (e: Exception) {
             log("[BT-BRIDGE] Bluetooth provisioning failed: ${e.message}")
+            ConnectionTrace.fail(
+                ConnectionTrace.Step.BLUETOOTH_RFCOMM_CONNECTED,
+                "Bluetooth RFCOMM error: ${e.message}",
+            )
             return false
         } finally {
             try {

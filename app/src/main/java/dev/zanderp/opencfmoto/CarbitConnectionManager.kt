@@ -186,6 +186,7 @@ object CarbitConnectionManager {
                         CarbitBtBridge.sendApInfo(
                             context = context,
                             btMac = btMac,
+                            ifaceName = subnet.interfaceName,
                             ssid = creds.ssid.ifBlank { "Mobile Hotspot" },
                             pwd = creds.pwd,
                             phoneIp = subnet.localAddress.hostAddress ?: "192.168.43.1",
