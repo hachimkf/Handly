@@ -81,10 +81,60 @@ object CarbitBtBridge {
         return if (bytes.size > maxBytes) "$hex... (${bytes.size}B)" else "$hex (${bytes.size}B)"
     }
 
+    data class ResolvedBtDevice(
+        val device: BluetoothDevice,
+        val qrBmMac: String,
+        val derivedMac: String,
+        val candidateName: String,
+        val isBonded: Boolean,
+    )
+
+    fun resolveDevice(adapter: BluetoothAdapter, rawBm: String): ResolvedBtDevice? {
+        val qrBmMac = rawBm.trim().uppercase()
+        val derivedMac = if (qrBmMac.startsWith("DD:")) "DC:" + qrBmMac.substring(3) else qrBmMac
+        val candidateName = "EC_${derivedMac.replace(":", "")}"
+        val altCandidateName = "EC_${qrBmMac.replace(":", "")}"
+
+        // 1. Search bonded devices first
+        val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
+        for (dev in bonded) {
+            val addr = dev.address.uppercase()
+            val name = dev.name.orEmpty()
+            if (addr == derivedMac || addr == qrBmMac ||
+                name.equals(candidateName, ignoreCase = true) ||
+                name.equals(altCandidateName, ignoreCase = true)
+            ) {
+                return ResolvedBtDevice(
+                    device = dev,
+                    qrBmMac = qrBmMac,
+                    derivedMac = derivedMac,
+                    candidateName = candidateName,
+                    isBonded = true,
+                )
+            }
+        }
+
+        // 2. Resolve via valid Bluetooth MAC address
+        val targetMac = when {
+            BluetoothAdapter.checkBluetoothAddress(derivedMac) -> derivedMac
+            BluetoothAdapter.checkBluetoothAddress(qrBmMac) -> qrBmMac
+            else -> null
+        } ?: return null
+
+        val device = runCatching { adapter.getRemoteDevice(targetMac) }.getOrNull() ?: return null
+        return ResolvedBtDevice(
+            device = device,
+            qrBmMac = qrBmMac,
+            derivedMac = derivedMac,
+            candidateName = candidateName,
+            isBonded = device.bondState == BluetoothDevice.BOND_BONDED,
+        )
+    }
+
     @SuppressLint("MissingPermission")
     fun sendApInfo(
         context: Context,
-        btMac: String,
+        rawBm: String,
         ifaceName: String,
         ssid: String,
         pwd: String,
@@ -92,8 +142,8 @@ object CarbitBtBridge {
         auth: String = "WPA2",
         log: (String) -> Unit = {},
     ): Boolean {
-        log("[BT-BRIDGE] Starting Bluetooth AP provisioning to MAC=$btMac...")
-        ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_PROVISION_STARTED, "MAC=$btMac")
+        log("[BT-BRIDGE] Starting Bluetooth AP provisioning for QR bm=$rawBm...")
+        ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_PROVISION_STARTED, "QR_BM=$rawBm")
 
         val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val adapter = btManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
@@ -106,26 +156,46 @@ object CarbitBtBridge {
             return false
         }
 
-        val device = try {
-            adapter.getRemoteDevice(btMac)
-        } catch (e: Exception) {
-            log("[BT-BRIDGE] Invalid Bluetooth MAC '$btMac': ${e.message}")
+        val resolved = resolveDevice(adapter, rawBm)
+        val qrBmMac = rawBm.trim().uppercase()
+        val derivedMac = if (qrBmMac.startsWith("DD:")) "DC:" + qrBmMac.substring(3) else qrBmMac
+        val candidateName = "EC_${derivedMac.replace(":", "")}"
+
+        log(
+            "[BT-BRIDGE] [DIAGNOSTICS] " +
+                "QR_BM_MAC=$qrBmMac " +
+                "DERIVED_BT_MAC=$derivedMac " +
+                "BT_DEVICE_NAME=$candidateName " +
+                "BT_DEVICE_FOUND=${resolved != null} " +
+                "BT_BONDED=${resolved?.isBonded ?: false} " +
+                "BT_RESOLVED_ADDRESS=${resolved?.device?.address ?: "NONE"}",
+        )
+
+        if (resolved == null) {
+            val reason = "Bluetooth device not found for MAC '$rawBm' (derived '$derivedMac', name '$candidateName')"
+            log("[BT-BRIDGE] $reason")
             ConnectionTrace.fail(
                 ConnectionTrace.Step.BLUETOOTH_DEVICE_FOUND,
-                "Invalid Bluetooth MAC: ${e.message}",
+                reason,
             )
             return false
         }
 
-        log("[BT-BRIDGE] Bluetooth device found: name='${device.name}' bonded=${device.bondState == BluetoothDevice.BOND_BONDED}")
-        ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_DEVICE_FOUND, "name=${device.name ?: "unknown"}, MAC=$btMac")
+        val device = resolved.device
+        val targetMac = device.address
+        log("[BT-BRIDGE] Bluetooth target selected: address='$targetMac' name='${device.name}' bonded=${resolved.isBonded}")
+        ConnectionTrace.transition(
+            ConnectionTrace.Step.BLUETOOTH_DEVICE_FOUND,
+            "name=${device.name ?: candidateName}, MAC=$targetMac",
+        )
 
         var socket: BluetoothSocket? = null
         try {
-            log("[BT-BRIDGE] Connecting RFCOMM socket to $btMac (SDP UUID=$SDP_UUID)...")
+            log("[BT-BRIDGE] Connecting RFCOMM socket to $targetMac (SDP UUID=$SDP_UUID)...")
             socket = device.createRfcommSocketToServiceRecord(SDP_UUID)
             socket.connect()
             log("[BT-BRIDGE] RFCOMM socket connected!")
+            log("[BT-BRIDGE] [DIAGNOSTICS] BT_RFCOMM_RESULT=SUCCESS")
             ConnectionTrace.transition(ConnectionTrace.Step.BLUETOOTH_RFCOMM_CONNECTED, "UUID=$SDP_UUID")
 
             val out = socket.outputStream
@@ -151,7 +221,7 @@ object CarbitBtBridge {
             // 2. Send EBT_P2C_CLIENT_INFO (0x00080010)
             val clientInfoJson = JSONObject().apply {
                 put("phoneType", 0)
-                put("phoneID", btMac)
+                put("phoneID", targetMac)
                 put("phoneName", android.os.Build.MODEL)
                 put("packageName", "net.easyconn.easyride.wws")
                 val netArr = org.json.JSONArray().apply {

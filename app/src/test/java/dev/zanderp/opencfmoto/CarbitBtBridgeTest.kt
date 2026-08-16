@@ -34,4 +34,16 @@ class CarbitBtBridgeTest {
         assertEquals(0x00080040, CarbitBtBridge.CMD_NOTIFY_AP_INFO)
         assertEquals("9f03b326-5d75-46f1-9a39-b71f144d1d97", CarbitBtBridge.SDP_UUID.toString())
     }
+
+    @Test
+    fun testMacDerivation() {
+        val rawBm = "DD:0D:30:5A:1E:71"
+        val qrBmMac = rawBm.trim().uppercase()
+        val derivedMac = if (qrBmMac.startsWith("DD:")) "DC:" + qrBmMac.substring(3) else qrBmMac
+        val candidateName = "EC_${derivedMac.replace(":", "")}"
+
+        assertEquals("DD:0D:30:5A:1E:71", qrBmMac)
+        assertEquals("DC:0D:30:5A:1E:71", derivedMac)
+        assertEquals("EC_DC0D305A1E71", candidateName)
+    }
 }

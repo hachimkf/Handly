@@ -175,27 +175,32 @@ object CarbitConnectionManager {
                     ConnectionTrace.Step.PHONE_HOTSPOT_ENABLED,
                     "Local IP=${subnet.localAddress.hostAddress}, iface=${subnet.interfaceName}",
                 )
-                ConnectionState.set(Phase.JOINING_WIFI, "Waiting for motorcycle...")
 
-                // Concurrently attempt Bluetooth SDP AP provisioning if MAC is present
-                val btMac = qr.mac
-                if (!btProvisionAttempted && !btMac.isNullOrBlank()) {
+                // 1. Perform Bluetooth SDP AP provisioning if MAC is present
+                val rawBm = qr.mac
+                if (!btProvisionAttempted && !rawBm.isNullOrBlank()) {
                     btProvisionAttempted = true
+                    ConnectionState.set(Phase.JOINING_WIFI, "Sending Wi-Fi credentials to motorcycle...")
                     val creds = PhoneHotspotAssist.loadCreds(context)
-                    thread(name = "bt-provision", isDaemon = true) {
-                        CarbitBtBridge.sendApInfo(
-                            context = context,
-                            btMac = btMac,
-                            ifaceName = subnet.interfaceName,
-                            ssid = creds.ssid.ifBlank { "Mobile Hotspot" },
-                            pwd = creds.pwd,
-                            phoneIp = subnet.localAddress.hostAddress ?: "192.168.43.1",
-                            log = { LogBus.log("$TAG $it") },
-                        )
+                    val btSuccess = CarbitBtBridge.sendApInfo(
+                        context = context,
+                        rawBm = rawBm,
+                        ifaceName = subnet.interfaceName,
+                        ssid = creds.ssid.ifBlank { "Mobile Hotspot" },
+                        pwd = creds.pwd,
+                        phoneIp = subnet.localAddress.hostAddress ?: "192.168.43.1",
+                        log = { LogBus.log("$TAG $it") },
+                    )
+                    if (!btSuccess) {
+                        LogBus.log("$TAG [HOTSPOT] Bluetooth provisioning failed — stopping connection flow.")
+                        ConnectionState.set(Phase.ERROR, "Bluetooth provisioning failed")
+                        return@thread
                     }
                 }
 
-                // Scan for motorcycle peer joining the hotspot
+                ConnectionState.set(Phase.JOINING_WIFI, "Waiting for motorcycle...")
+
+                // 2. Scan for motorcycle peer joining the hotspot
                 val peer = PhoneHotspotScan.findEasyConnPeer(subnet) { LogBus.log("$TAG $it") }
                     ?: EasyConnDiscovery.discoverNsd(context, LogBus::log)?.host
 
@@ -243,8 +248,8 @@ object CarbitConnectionManager {
 
             LogBus.log("$TAG [HOTSPOT] Hotspot connection timeout — motorcycle did not join")
             ConnectionTrace.fail(
-                failedStep = ConnectionTrace.Step.PHONE_HOTSPOT_ENABLED,
-                reason = "Motorcycle did not join Mobile Hotspot within 60s",
+                failedStep = ConnectionTrace.Step.MOTORCYCLE_JOINED_HOTSPOT,
+                reason = "Motorcycle provisioned over Bluetooth but did not associate with Hotspot within 60s",
             )
             ConnectionState.set(Phase.ERROR, "Motorcycle did not join hotspot")
         }
