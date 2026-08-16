@@ -17,10 +17,12 @@ class CarbitConnectionManagerTest {
         assertNotNull(qr)
 
         assertEquals("40603", qr!!.modelId)
+        assertEquals(128, qr.action)
         assertTrue((qr.action and 128) != 0)
         assertEquals("dd:0d:30:5a:1e:71", qr.mac)
-        assertEquals("EC_DC0D305A1E71", qr.ssid)
-        assertTrue(qr.supportsP2p)
+        assertEquals("", qr.ssid)
+        assertFalse(qr.supportsP2p)
+        assertTrue(qr.supportsPhoneHotspot)
 
         val profile = BikeProfiles.selectByQr(qr)
         assertNotNull(profile)

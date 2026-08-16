@@ -3,6 +3,7 @@
 package dev.zanderp.opencfmoto
 
 import android.content.Context
+import kotlin.concurrent.thread
 
 /**
  * Single high-level connection facade orchestrating the motorcycle Carbit/EasyConnect/PXC lifecycle:
@@ -71,15 +72,30 @@ object CarbitConnectionManager {
         prober = pr
         BikeLink.prober = pr
 
-        val hasMac = !qr.mac.isNullOrBlank()
-        val isCarbitEcDevice = qr.ssid.startsWith("EC_", ignoreCase = true) ||
-            qr.name?.startsWith("EC_", ignoreCase = true) == true
-        val preferP2pByMac = hasMac && (qr.supportsP2p || isCarbitEcDevice || qr.pwd.isEmpty())
+        val isPhoneHotspot = qr.supportsPhoneHotspot || (qr.action and 128) != 0
+        val isP2p = qr.supportsP2p || (qr.action and 8) != 0
 
-        if (preferP2pByMac) {
-            connectP2p(appCtx, qr, pr)
-        } else {
-            connectSoftAp(appCtx, qr, pr)
+        val transportName = when {
+            isPhoneHotspot -> "PHONE_HOTSPOT"
+            isP2p -> "WIFI_DIRECT_P2P"
+            else -> "SOFTAP"
+        }
+
+        ConnectionTrace.transition(
+            ConnectionTrace.Step.QR_PARSED,
+            "action=${qr.action} transport=$transportName bm=${qr.mac ?: "none"}",
+        )
+
+        when {
+            isPhoneHotspot -> {
+                connectPhoneHotspot(appCtx, qr, pr)
+            }
+            isP2p -> {
+                connectP2p(appCtx, qr, pr)
+            }
+            else -> {
+                connectSoftAp(appCtx, qr, pr)
+            }
         }
     }
 
@@ -114,6 +130,93 @@ object CarbitConnectionManager {
         LogBus.log("$TAG disconnect() called")
         cleanupPreviousSession(context)
         ConnectionState.set(Phase.STOPPED)
+    }
+
+    private fun connectPhoneHotspot(context: Context, qr: QrData, pr: EasyConnProber) {
+        LogBus.log("$TAG Starting Phone Hotspot flow for MAC=${qr.mac} (action=${qr.action})...")
+
+        thread(name = "hotspot-flow", isDaemon = true) {
+            val deadline = System.currentTimeMillis() + 60_000L
+            var notifiedSettings = false
+
+            while (System.currentTimeMillis() < deadline) {
+                val subnets = PhoneHotspotScan.tetheringSubnets()
+                if (subnets.isEmpty()) {
+                    if (!notifiedSettings) {
+                        notifiedSettings = true
+                        LogBus.log("$TAG [HOTSPOT] No active tethering subnet detected — please enable Mobile Hotspot")
+                        ConnectionTrace.transition(
+                            ConnectionTrace.Step.PHONE_HOTSPOT_REQUIRED,
+                            "Turn on Mobile Hotspot in Android settings",
+                        )
+                        ConnectionState.set(Phase.JOINING_WIFI, "Turn on Mobile Hotspot")
+                        PhoneHotspotAssist.openHotspotSettings(context)
+                    }
+                    Thread.sleep(1500L)
+                    continue
+                }
+
+                val subnet = subnets.first()
+                LogBus.log("$TAG [HOTSPOT] Tethering subnet active: local IP=${subnet.localAddress.hostAddress} (${subnet.interfaceName})")
+                ConnectionTrace.transition(
+                    ConnectionTrace.Step.PHONE_HOTSPOT_ENABLED,
+                    "Local IP=${subnet.localAddress.hostAddress}, iface=${subnet.interfaceName}",
+                )
+                ConnectionState.set(Phase.JOINING_WIFI, "Waiting for motorcycle...")
+
+                // Scan for motorcycle peer joining the hotspot
+                val peer = PhoneHotspotScan.findEasyConnPeer(subnet) { LogBus.log("$TAG $it") }
+                    ?: EasyConnDiscovery.discoverNsd(context, LogBus::log)?.host
+
+                if (peer != null) {
+                    LogBus.log("$TAG [HOTSPOT] *** Motorcycle connected to hotspot at ${peer.hostAddress} ***")
+                    ConnectionTrace.transition(
+                        ConnectionTrace.Step.MOTORCYCLE_JOINED_HOTSPOT,
+                        "Dash IP=${peer.hostAddress}",
+                    )
+                    ConnectionTrace.transition(
+                        ConnectionTrace.Step.PHONE_IP_DISCOVERED,
+                        subnet.localAddress.hostAddress ?: "",
+                    )
+                    ConnectionTrace.transition(
+                        ConnectionTrace.Step.DASH_IP_DISCOVERED,
+                        peer.hostAddress ?: "",
+                    )
+                    ConnectionTrace.transition(
+                        ConnectionTrace.Step.NETWORK_AVAILABLE,
+                        "Phone=${subnet.localAddress.hostAddress}, Dash=${peer.hostAddress}",
+                    )
+                    ConnectionState.set(Phase.PXC_CONNECTING, "Establishing Carbit link...")
+
+                    try {
+                        pr.start(
+                            network = null,
+                            gatewayOverride = peer,
+                            bindIpOverride = subnet.localAddress,
+                        )
+                    } catch (e: Exception) {
+                        LogBus.log("$TAG prober start failed: ${e.message}")
+                        ConnectionTrace.fail(
+                            failedStep = ConnectionTrace.Step.PXC_SERVER_10922_BOUND,
+                            reason = "PXC socket start failed: ${e.message}",
+                            dashIp = peer.hostAddress,
+                            port = 10922,
+                        )
+                        ConnectionState.set(Phase.ERROR, "PXC connection failed")
+                    }
+                    return@thread
+                }
+
+                Thread.sleep(1500L)
+            }
+
+            LogBus.log("$TAG [HOTSPOT] Hotspot connection timeout — motorcycle did not join")
+            ConnectionTrace.fail(
+                failedStep = ConnectionTrace.Step.PHONE_HOTSPOT_ENABLED,
+                reason = "Motorcycle did not join Mobile Hotspot within 60s",
+            )
+            ConnectionState.set(Phase.ERROR, "Motorcycle did not join hotspot")
+        }
     }
 
     private fun connectP2p(context: Context, qr: QrData, pr: EasyConnProber) {

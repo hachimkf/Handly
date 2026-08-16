@@ -311,7 +311,9 @@ class MainActivity : AppCompatActivity() {
                 stopEverything()
                 return@setOnClickListener
             }
-            if (!WifiGate.ensureEnabledOrPrompt(this)) {
+            val saved = BikeMemory.lastQr(this)
+            val isHotspot = saved?.supportsPhoneHotspot == true || ((saved?.action ?: 0) and 128) != 0
+            if (!isHotspot && !WifiGate.ensureEnabledOrPrompt(this)) {
                 log("→ Connect blocked — Wi-Fi is off")
                 return@setOnClickListener
             }
@@ -321,7 +323,6 @@ class MainActivity : AppCompatActivity() {
             }
             log("→ connection dependencies OK")
 
-            val saved = BikeMemory.lastQr(this)
             if (saved != null) {
                 log("→ CarbitConnectionManager.connect() for saved bike '${BikeMemory.lastBikeName(this)}'")
                 ProjectionHolder.projection = null

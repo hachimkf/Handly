@@ -67,18 +67,16 @@ data class QrData(
             val phoneHotspot = (action and 128) != 0 || (ssid.isEmpty() && hasMac && q.containsKey("bm"))
             if (ssid.isEmpty() && !phoneHotspot && !hasMac) return null
             if (ssid.isNotEmpty() && pwd.isEmpty() && !phoneHotspot && !hasMac) return null
-            val wifiMac = mac?.let { if (it.startsWith("dd:", ignoreCase = true)) "dc:" + it.substring(3) else it }
             val display = q["name"]?.takeIf { it.isNotBlank() }
-                ?: if (ssid.isNotEmpty()) null
-                else wifiMac?.let { "EC_${it.replace(":", "").uppercase()}" }
-            val resolvedSsid = if (ssid.isNotEmpty()) ssid else (wifiMac?.let { "EC_${it.replace(":", "").uppercase()}" } ?: "")
+                ?: if (ssid.isNotEmpty()) ssid
+                else q["modelid"]?.let { "Motorcycle ($it)" }
             return QrData(
-                ssid = resolvedSsid,
+                ssid = ssid,
                 pwd = pwd,
                 auth = q["auth"],
                 mac = mac,
                 name = display,
-                action = if (hasMac && (action and 8) == 0) action or 8 else action,
+                action = action,
                 modelId = q["modelid"],
                 sn = q["sn"],
                 channel = q["channel"],

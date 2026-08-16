@@ -54,9 +54,11 @@ class QrDataTest {
         assertNotNull(qr)
         assertTrue(qr!!.supportsPhoneHotspot)
         assertFalse(qr.supportsAp)
+        assertFalse(qr.supportsP2p)
         assertEquals("dd:0d:30:24:87:6d", qr.mac)
         assertEquals("21322", qr.modelId)
-        assertTrue(qr.ssid.startsWith("EC_") || qr.ssid.startsWith("PHONE-HOTSPOT"))
+        assertEquals(128, qr.action)
+        assertEquals("", qr.ssid)
         assertTrue(qr.pwd.isEmpty())
     }
 
